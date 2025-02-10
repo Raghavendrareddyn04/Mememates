@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "732413251106",
+    "firebase_url": "https://mememates1-default-rtdb.firebaseio.com",
+    "project_id": "mememates1",
+    "storage_bucket": "mememates1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:732413251106:android:0f674052976b7aa114c47b",
+        "android_client_info": {
+          "package_name": "com.example.mememates"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "732413251106-5ksk6v45b9kku1ccbpn03abjmkjvv0o7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mememates",
+            "certificate_hash": "6c68e66f0f1d133d82bb26de38ddc10b7c6687c2"
+          }
+        },
+        {
+          "client_id": "732413251106-jedg3hl2a5di93pr30iduulsav3pcake.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbCc4sx_possVwCnIEnwVJS0DrO3YI7KY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "732413251106-jedg3hl2a5di93pr30iduulsav3pcake.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "732413251106-21e8iqa18b6fagsqvpmde2dfitpj364m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mememates"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
