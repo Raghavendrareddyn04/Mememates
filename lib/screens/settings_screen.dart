@@ -249,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         dropdownColor: Colors.deepPurple,
                         style: const TextStyle(color: Colors.white),
-                        items: ['Male', 'Female', 'Non-binary', 'Everyone']
+                        items: ['Male', 'Female', 'Non-binary', 'All']
                             .map((gender) => DropdownMenuItem(
                                   value: gender,
                                   child: Text(gender),

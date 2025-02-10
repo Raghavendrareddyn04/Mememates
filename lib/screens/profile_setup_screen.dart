@@ -425,7 +425,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 selectedColor: Colors.deepPurple,
                 checkmarkColor: Colors.white,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? Colors.white : Colors.black,
                 ),
               );
             }).toList(),

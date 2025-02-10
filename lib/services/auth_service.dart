@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -9,8 +10,6 @@ class AuthService {
     clientId:
         '732413251106-jedg3hl2a5di93pr30iduulsav3pcake.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
-    hostedDomain: 'mememates1.web.app',
-    signInOption: SignInOption.standard,
   );
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -59,31 +58,25 @@ class AuthService {
   // Sign in with Google
   Future<UserCredential> signInWithGoogle() async {
     try {
-      // Begin interactive sign in process
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (kIsWeb) {
+        // Web implementation
+        GoogleAuthProvider authProvider = GoogleAuthProvider();
+        return await _auth.signInWithPopup(authProvider);
+      } else {
+        // Mobile implementation
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) {
+          throw 'Google sign in was cancelled';
+        }
 
-      // If the sign in was cancelled, throw an error
-      if (googleUser == null) {
-        throw 'Google sign in was cancelled';
-      }
-
-      try {
-        // Obtain auth details from request
         final GoogleSignInAuthentication googleAuth =
             await googleUser.authentication;
-
-        // Create a new credential for Firebase
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
 
-        // Sign in to Firebase with the Google credential
         return await _auth.signInWithCredential(credential);
-      } catch (e) {
-        // If any part of the sign-in process fails, sign out from Google
-        await _googleSignIn.signOut();
-        throw 'Failed to sign in with Google: $e';
       }
     } catch (e) {
       // Ensure we're signed out of Google if anything fails
@@ -116,9 +109,11 @@ class AuthService {
   Future<void> signOut() async {
     try {
       // Sign out from all providers first
-      try {
-        await _googleSignIn.signOut();
-      } catch (_) {}
+      if (!kIsWeb) {
+        try {
+          await _googleSignIn.signOut();
+        } catch (_) {}
+      }
 
       try {
         await FacebookAuth.instance.logOut();

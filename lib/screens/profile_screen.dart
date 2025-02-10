@@ -16,11 +16,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _memeService = MemeService();
   bool _isLoading = false;
   Map<String, dynamic>? _userProfile;
+  int _postedMemesCount = 0;
+  int _likedMemesCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadMemeCounts();
   }
 
   Future<void> _loadUserProfile() async {
@@ -46,6 +49,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _loadMemeCounts() async {
+    try {
+      final currentUser = _userService.currentUser;
+      if (currentUser != null) {
+        final postedMemes =
+            await _memeService.getUserMemes(currentUser.uid).first;
+        final likedMemes = await _memeService.getLikedMemes(currentUser.uid);
+
+        setState(() {
+          _postedMemesCount = postedMemes.length;
+          _likedMemesCount = likedMemes.length;
+        });
+      }
+    } catch (e) {
+      print('Error loading meme counts: $e');
     }
   }
 
@@ -101,27 +122,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: CircleAvatar(
-                  radius: 60,
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  backgroundImage: _userProfile?['profileImage'] != null
-                      ? NetworkImage(_userProfile!['profileImage'])
-                      : null,
-                  child: _userProfile?['profileImage'] == null
-                      ? const Icon(
-                          Icons.person,
-                          size: 60,
-                          color: Colors.white,
-                        )
-                      : null,
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundImage: _userProfile?['profileImage'] != null
+                          ? NetworkImage(_userProfile!['profileImage'])
+                          : null,
+                      child: _userProfile?['profileImage'] == null
+                          ? const Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.white,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _userProfile?['name'] ?? 'Not set',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
-              _buildInfoCard(
-                title: 'Name',
-                content: _userProfile?['name'] ?? 'Not set',
+              // Stats Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildStatCard(
+                    icon: Icons.post_add,
+                    label: 'Posted',
+                    value: _postedMemesCount.toString(),
+                  ),
+                  _buildStatCard(
+                    icon: Icons.favorite,
+                    label: 'Liked',
+                    value: _likedMemesCount.toString(),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               _buildInfoCard(
                 title: 'Age',
                 content: _userProfile?['age']?.toString() ?? 'Not set',
@@ -133,8 +179,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               _buildInfoCard(
+                title: 'Interested In',
+                content: _userProfile?['preferredGender'] ?? 'Not set',
+              ),
+              const SizedBox(height: 16),
+              _buildInfoCard(
                 title: 'Bio',
                 content: _userProfile?['bio'] ?? 'No bio yet',
+              ),
+              const SizedBox(height: 16),
+              _buildInfoCard(
+                title: 'Interests',
+                content: (_userProfile?['interests'] as List<dynamic>?)
+                        ?.join(', ') ??
+                    'No interests added',
               ),
               const SizedBox(height: 24),
               const Text(
@@ -176,6 +234,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 content: _userProfile?['anthem'] ?? 'No anthem selected',
                 icon: Icons.music_note,
               ),
+              if (_userProfile?['artistName'] != null) ...[
+                const SizedBox(height: 16),
+                _buildInfoCard(
+                  title: 'Artist',
+                  content: _userProfile!['artistName'],
+                  icon: Icons.person,
+                ),
+              ],
+              if (_userProfile?['songTitle'] != null) ...[
+                const SizedBox(height: 16),
+                _buildInfoCard(
+                  title: 'Song',
+                  content: _userProfile!['songTitle'],
+                  icon: Icons.music_note,
+                ),
+              ],
               const SizedBox(height: 24),
               const Text(
                 'Your Memes',
@@ -298,6 +372,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }

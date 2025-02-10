@@ -6,12 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import '../models/meme_post.dart';
 import '../services/meme_service.dart';
 import '../services/auth_service.dart';
+import '../services/user_service.dart';
 import '../widgets/notification_badge.dart';
 import 'chat_screen.dart';
 import 'notifications_screen.dart';
 import 'settings_screen.dart';
 import 'premium_screen.dart';
 import 'messages_screen.dart';
+import 'vibe_match_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,7 +25,120 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final MemeService _memeService = MemeService();
   final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
   final ImagePicker _imagePicker = ImagePicker();
+
+  // Feed Preferences
+  RangeValues _ageRange = const RangeValues(18, 35);
+  String? _preferredGender;
+  bool _showPreferences = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final currentUser = _authService.currentUser;
+    if (currentUser != null) {
+      final settings = await _userService.getUserSettings(currentUser.uid);
+      if (settings != null) {
+        setState(() {
+          _ageRange = RangeValues(
+            (settings['minAge'] ?? 18).toDouble(),
+            (settings['maxAge'] ?? 35).toDouble(),
+          );
+          _preferredGender = settings['preferredGender'];
+        });
+      }
+    }
+  }
+
+  Future<void> _savePreferences() async {
+    final currentUser = _authService.currentUser;
+    if (currentUser != null) {
+      await _userService.updateUserSettings(
+        userId: currentUser.uid,
+        settings: {
+          'minAge': _ageRange.start.round(),
+          'maxAge': _ageRange.end.round(),
+          'preferredGender': _preferredGender,
+        },
+      );
+    }
+  }
+
+  Widget _buildPreferencesPanel() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: _showPreferences ? 200 : 0,
+      child: SingleChildScrollView(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius:
+                const BorderRadius.vertical(bottom: Radius.circular(16)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Feed Preferences',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Age Range',
+                style: TextStyle(color: Colors.white),
+              ),
+              RangeSlider(
+                values: _ageRange,
+                min: 18,
+                max: 100,
+                divisions: 82,
+                labels: RangeLabels(
+                  _ageRange.start.round().toString(),
+                  _ageRange.end.round().toString(),
+                ),
+                onChanged: (values) => setState(() => _ageRange = values),
+                onChangeEnd: (values) => _savePreferences(),
+              ),
+              DropdownButtonFormField<String>(
+                value: _preferredGender,
+                dropdownColor: Colors.deepPurple,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Show Memes From',
+                  labelStyle: const TextStyle(color: Colors.white70),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                items: ['All', 'Male', 'Female', 'Non-binary']
+                    .map((gender) => DropdownMenuItem(
+                          value: gender,
+                          child: Text(gender),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() => _preferredGender = value);
+                  _savePreferences();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _navigateToChat(BuildContext context, MemePost meme) async {
     final userProfile = UserProfile(
@@ -182,11 +297,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Meme Feed',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            const Text(
+              'Meme Feed',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            IconButton(
+              icon: Icon(
+                _showPreferences ? Icons.expand_less : Icons.tune,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  _showPreferences = !_showPreferences;
+                });
+              },
+            ),
+          ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.favorite),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const VibeMatchScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: NotificationBadge(
               child: const Icon(Icons.notifications),
@@ -194,7 +335,8 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen()),
+                builder: (context) => const NotificationsScreen(),
+              ),
             ),
           ),
           IconButton(
@@ -343,111 +485,125 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: StreamBuilder<List<MemePost>>(
-        stream: _memeService.getMemesFeed(currentUser.uid),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {});
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
+      body: Column(
+        children: [
+          _buildPreferencesPanel(),
+          Expanded(
+            child: StreamBuilder<List<MemePost>>(
+              stream: _memeService.getMemesFeed(
+                currentUser.uid,
+                minAge: _ageRange.start.round(),
+                maxAge: _ageRange.end.round(),
+                preferredGender: _preferredGender,
               ),
-            );
-          }
-
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          final memes = snapshot.data!;
-          if (memes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.sentiment_dissatisfied,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No memes yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: Colors.grey[600],
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline,
+                            size: 48, color: Colors.red[300]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {});
+                          },
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Be the first to post a meme!',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _showPostMemeDialog,
-                    icon: const Icon(Icons.add_photo_alternate),
-                    label: const Text('Post a Meme'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
+                  );
+                }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {});
-            },
-            child: ListView.builder(
-              itemCount: memes.length,
-              itemBuilder: (context, index) {
-                final meme = memes[index];
-                return FutureBuilder<bool>(
-                  future: meme.canChatWith(currentUser.uid),
-                  builder: (context, snapshot) {
-                    final canChat = snapshot.data ?? false;
-                    return _MemeCard(
-                      meme: meme,
-                      currentUserId: currentUser.uid,
-                      onLike: () =>
-                          _memeService.likeMeme(meme.id, currentUser.uid),
-                      onPass: () =>
-                          _memeService.passMeme(meme.id, currentUser.uid),
-                      onChat:
-                          canChat ? () => _navigateToChat(context, meme) : null,
-                    );
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                final memes = snapshot.data!;
+                if (memes.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.sentiment_dissatisfied,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No memes yet',
+                          style: TextStyle(
+                            fontSize: 20,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Be the first to post a meme!',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: _showPostMemeDialog,
+                          icon: const Icon(Icons.add_photo_alternate),
+                          label: const Text('Post a Meme'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(() {});
                   },
+                  child: ListView.builder(
+                    itemCount: memes.length,
+                    itemBuilder: (context, index) {
+                      final meme = memes[index];
+                      return FutureBuilder<bool>(
+                        future: meme.canChatWith(currentUser.uid),
+                        builder: (context, snapshot) {
+                          final canChat = snapshot.data ?? false;
+                          return _MemeCard(
+                            meme: meme,
+                            currentUserId: currentUser.uid,
+                            onLike: () =>
+                                _memeService.likeMeme(meme.id, currentUser.uid),
+                            onPass: () =>
+                                _memeService.passMeme(meme.id, currentUser.uid),
+                            onChat: canChat
+                                ? () => _navigateToChat(context, meme)
+                                : null,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 );
               },
             ),
-          );
-        },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showPostMemeDialog,
@@ -458,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _MemeCard extends StatelessWidget {
+class _MemeCard extends StatefulWidget {
   final MemePost meme;
   final String currentUserId;
   final VoidCallback onLike;
@@ -474,14 +630,97 @@ class _MemeCard extends StatelessWidget {
   });
 
   @override
+  State<_MemeCard> createState() => _MemeCardState();
+}
+
+class _MemeCardState extends State<_MemeCard> {
+  bool _isLiked = false;
+  bool _isPassed = false;
+  bool _isProcessing = false;
+  bool _isDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLiked = widget.meme.isLikedBy(widget.currentUserId);
+    _isPassed = widget.meme.isPassedBy(widget.currentUserId);
+  }
+
+  Future<void> _handleLike() async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isLiked = true;
+      _isProcessing = true;
+    });
+
+    try {
+      widget.onLike();
+      setState(() {
+        _isDismissed = true;
+      });
+    } catch (e) {
+      setState(() {
+        _isLiked = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handlePass() async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isPassed = true;
+      _isProcessing = true;
+    });
+
+    try {
+      widget.onPass();
+      setState(() {
+        _isDismissed = true;
+      });
+    } catch (e) {
+      setState(() {
+        _isPassed = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isDismissed) {
+      return const SizedBox.shrink();
+    }
+
     return Dismissible(
-      key: Key(meme.id),
+      key: Key(widget.meme.id),
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
-          onPass();
+          _handlePass();
         } else {
-          onLike();
+          _handleLike();
         }
       },
       background: Container(
@@ -508,14 +747,14 @@ class _MemeCard extends StatelessWidget {
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: Colors.deepPurple.shade100,
-                backgroundImage: meme.userProfileImage != null &&
-                        meme.userProfileImage!.isNotEmpty
-                    ? NetworkImage(meme.userProfileImage!)
+                backgroundImage: widget.meme.userProfileImage != null &&
+                        widget.meme.userProfileImage!.isNotEmpty
+                    ? NetworkImage(widget.meme.userProfileImage!)
                     : null,
-                child: meme.userProfileImage == null ||
-                        meme.userProfileImage!.isEmpty
+                child: widget.meme.userProfileImage == null ||
+                        widget.meme.userProfileImage!.isEmpty
                     ? Text(
-                        meme.userName[0].toUpperCase(),
+                        widget.meme.userName[0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.deepPurple,
                           fontWeight: FontWeight.bold,
@@ -524,10 +763,10 @@ class _MemeCard extends StatelessWidget {
                     : null,
               ),
               title: Text(
-                meme.userName,
+                widget.meme.userName,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: Text(meme.caption),
+              subtitle: Text(widget.meme.caption),
               trailing: IconButton(
                 icon: const Icon(Icons.more_vert),
                 onPressed: () {
@@ -563,19 +802,19 @@ class _MemeCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => MemeDetailScreen(meme: meme),
+                    builder: (context) => MemeDetailScreen(meme: widget.meme),
                   ),
                 );
               },
-              onDoubleTap: onLike,
+              onDoubleTap: _handleLike,
               child: Hero(
-                tag: 'meme_${meme.id}',
+                tag: 'meme_${widget.meme.id}',
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(12),
                   ),
                   child: Image.network(
-                    meme.memeUrl,
+                    widget.meme.memeUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
                     loadingBuilder: (context, child, loadingProgress) {
@@ -606,11 +845,11 @@ class _MemeCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (meme.songTitle != null)
+            if (widget.meme.songTitle != null)
               ListTile(
                 leading: const Icon(Icons.music_note, color: Colors.deepPurple),
-                title: Text(meme.songTitle!),
-                subtitle: Text(meme.artistName ?? ''),
+                title: Text(widget.meme.songTitle!),
+                subtitle: Text(widget.meme.artistName ?? ''),
                 trailing: IconButton(
                   icon: const Icon(Icons.play_circle),
                   onPressed: () {
@@ -625,21 +864,24 @@ class _MemeCard extends StatelessWidget {
                 children: [
                   _buildActionButton(
                     icon: Icons.favorite,
-                    color: meme.isLikedBy(currentUserId) ? Colors.red : null,
-                    onPressed: onLike,
+                    color: _isLiked ? Colors.red : null,
+                    onPressed: _handleLike,
                     label: 'Like',
+                    isProcessing: _isProcessing && _isLiked,
                   ),
                   _buildActionButton(
                     icon: Icons.close,
-                    onPressed: onPass,
+                    onPressed: _handlePass,
                     label: 'Pass',
+                    isProcessing: _isProcessing && _isPassed,
                   ),
-                  if (onChat != null)
+                  if (widget.onChat != null)
                     _buildActionButton(
                       icon: Icons.chat,
                       color: Colors.deepPurple,
-                      onPressed: onChat ?? () {},
+                      onPressed: widget.onChat ?? () {},
                       label: 'Chat',
+                      isProcessing: false,
                     ),
                 ],
               ),
@@ -655,12 +897,19 @@ class _MemeCard extends StatelessWidget {
     Color? color,
     required VoidCallback onPressed,
     required String label,
+    required bool isProcessing,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          icon: Icon(icon, size: 32, color: color),
+          icon: isProcessing
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(icon, size: 32, color: color),
           onPressed: onPressed,
         ),
         Text(
