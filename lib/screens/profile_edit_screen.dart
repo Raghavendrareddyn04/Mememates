@@ -31,8 +31,26 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   bool _isLoading = false;
   int? _age;
   String? _gender;
+  String? _preferredGender;
+  List<String> _interests = [];
+  String? _artistName;
+  String? _songTitle;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Non-binary', 'Other'];
+  final List<String> _interestOptions = [
+    'Memes',
+    'Gaming',
+    'Music',
+    'Movies',
+    'Travel',
+    'Food',
+    'Art',
+    'Sports',
+    'Technology',
+    'Fashion',
+    'Photography',
+    'Reading'
+  ];
 
   @override
   void initState() {
@@ -50,6 +68,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       _profileImageUrl = widget.initialProfile!['profileImage'];
       _age = widget.initialProfile!['age'];
       _gender = widget.initialProfile!['gender'];
+      _preferredGender = widget.initialProfile!['preferredGender'];
+      _interests = List<String>.from(widget.initialProfile!['interests'] ?? []);
+      _artistName = widget.initialProfile!['artistName'];
+      _songTitle = widget.initialProfile!['songTitle'];
     }
   }
 
@@ -68,10 +90,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking image: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error picking image: $e')),
         );
       }
     }
@@ -79,9 +98,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   Future<void> _addMoodBoardImage() async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-      );
+      final XFile? image =
+          await _imagePicker.pickImage(source: ImageSource.gallery);
       if (image != null) {
         setState(() => _isLoading = true);
         final url = await _cloudinaryService.uploadImage(image.path);
@@ -94,10 +112,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error adding image: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error adding image: $e')),
         );
       }
     }
@@ -119,6 +134,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           profileImage: _profileImageUrl,
           age: _age,
           gender: _gender,
+          preferredGender: _preferredGender,
+          artistName: _artistName,
+          songTitle: _songTitle,
+          interests: _interests,
         );
 
         if (!mounted) return;
@@ -131,10 +150,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving profile: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error saving profile: $e')),
         );
       }
     } finally {
@@ -152,10 +168,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         actions: [
           TextButton(
             onPressed: _isLoading ? null : _saveProfile,
-            child: const Text(
-              'Save',
-              style: TextStyle(color: Colors.black),
-            ),
+            child: const Text('Save', style: TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -190,11 +203,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                   ? NetworkImage(_profileImageUrl!)
                                   : null,
                               child: _profileImageUrl == null
-                                  ? const Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: Colors.white,
-                                    )
+                                  ? const Icon(Icons.person,
+                                      size: 60, color: Colors.white)
                                   : null,
                             ),
                             Positioned(
@@ -235,11 +245,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                     color: Colors.deepPurple,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
+                                  child: const Icon(Icons.camera_alt,
+                                      color: Colors.white, size: 20),
                                 ),
                               ),
                             ),
@@ -256,8 +263,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           filled: true,
                           fillColor: Colors.white.withOpacity(0.1),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         validator: (value) =>
                             value?.isEmpty ?? true ? 'Name is required' : null,
@@ -273,24 +279,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           filled: true,
                           fillColor: Colors.white.withOpacity(0.1),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
+                          if (value == null || value.isEmpty)
                             return 'Age is required';
-                          }
                           final age = int.tryParse(value);
-                          if (age == null || age < 18) {
+                          if (age == null || age < 18)
                             return 'Must be at least 18 years old';
-                          }
                           return null;
                         },
-                        onChanged: (value) {
-                          setState(() {
-                            _age = int.tryParse(value);
-                          });
-                        },
+                        onChanged: (value) =>
+                            setState(() => _age = int.tryParse(value)),
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
@@ -303,18 +303,35 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           filled: true,
                           fillColor: Colors.white.withOpacity(0.1),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         items: _genderOptions.map((gender) {
                           return DropdownMenuItem(
-                            value: gender,
-                            child: Text(gender),
-                          );
+                              value: gender, child: Text(gender));
                         }).toList(),
                         onChanged: (value) => setState(() => _gender = value),
                         validator: (value) =>
                             value == null ? 'Please select a gender' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: _preferredGender,
+                        style: const TextStyle(color: Colors.white),
+                        dropdownColor: Colors.deepPurple,
+                        decoration: InputDecoration(
+                          labelText: 'Interested In',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: [..._genderOptions, 'All'].map((gender) {
+                          return DropdownMenuItem(
+                              value: gender, child: Text(gender));
+                        }).toList(),
+                        onChanged: (value) =>
+                            setState(() => _preferredGender = value),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -327,9 +344,44 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                           filled: true,
                           fillColor: Colors.white.withOpacity(0.1),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Interests',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _interestOptions.map((interest) {
+                          final isSelected = _interests.contains(interest);
+                          return FilterChip(
+                            label: Text(interest),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _interests.add(interest);
+                                } else {
+                                  _interests.remove(interest);
+                                }
+                              });
+                            },
+                            backgroundColor: Colors.white.withOpacity(0.1),
+                            selectedColor: Colors.deepPurple,
+                            checkmarkColor: Colors.white,
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.white : Colors.white70,
+                            ),
+                          );
+                        }).toList(),
                       ),
                       const SizedBox(height: 24),
                       const Text(
@@ -360,10 +412,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                   color: Colors.white.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(
-                                  Icons.add_photo_alternate,
-                                  color: Colors.white.withOpacity(0.5),
-                                ),
+                                child: Icon(Icons.add_photo_alternate,
+                                    color: Colors.white.withOpacity(0.5)),
                               ),
                             );
                           }
@@ -394,11 +444,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                                       color: Colors.red,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(
-                                      Icons.close,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
+                                    child: const Icon(Icons.close,
+                                        color: Colors.white, size: 16),
                                   ),
                                 ),
                               ),
@@ -408,7 +455,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Anthem',
+                        'Music',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -416,22 +463,49 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      ListTile(
-                        tileColor: Colors.white.withOpacity(0.1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      TextFormField(
+                        initialValue: _selectedSong,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Anthem',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        leading:
-                            const Icon(Icons.music_note, color: Colors.white),
-                        title: Text(
-                          _selectedSong ?? 'Select a song',
-                          style: const TextStyle(color: Colors.white),
+                        onChanged: (value) =>
+                            setState(() => _selectedSong = value),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _artistName,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Artist Name',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        trailing: const Icon(Icons.chevron_right,
-                            color: Colors.white),
-                        onTap: () {
-                          // Show song selection dialog
-                        },
+                        onChanged: (value) =>
+                            setState(() => _artistName = value),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: _songTitle,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Song Title',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onChanged: (value) =>
+                            setState(() => _songTitle = value),
                       ),
                     ],
                   ),

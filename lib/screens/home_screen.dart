@@ -27,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
   final ImagePicker _imagePicker = ImagePicker();
+  Map<String, dynamic>? _streakInfo;
+  bool _isLoading = false;
 
   // Feed Preferences
   RangeValues _ageRange = const RangeValues(18, 35);
@@ -37,6 +39,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPreferences();
+    _loadStreakInfo();
+  }
+
+  Future<void> _loadStreakInfo() async {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
+        final streakInfo =
+            await _memeService.getUserStreakInfo(currentUser.uid);
+        setState(() {
+          _streakInfo = streakInfo;
+        });
+      }
+    } catch (e) {
+      print('Error loading streak info: $e');
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -292,6 +310,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final currentUser = _authService.currentUser;
     if (currentUser == null) return const SizedBox();
 
@@ -487,6 +511,50 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          if (_streakInfo != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _streakInfo!['isStreakActive']
+                        ? Icons.local_fire_department
+                        : Icons.timer,
+                    color: _streakInfo!['isStreakActive']
+                        ? Colors.orange
+                        : Colors.red,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    children: [
+                      Text(
+                        'Streak: ${_streakInfo!['streak']}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (!_streakInfo!['isStreakActive'])
+                        Text(
+                          'Post in ${_streakInfo!['hoursRemaining']}h to keep your streak!',
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           _buildPreferencesPanel(),
           Expanded(
             child: StreamBuilder<List<MemePost>>(

@@ -95,6 +95,9 @@ class UserService {
     int? age,
     String? gender,
     String? preferredGender,
+    String? songTitle,
+    String? artistName,
+    required List<String> interests,
   }) async {
     try {
       final Map<String, dynamic> updates = {};
@@ -124,13 +127,13 @@ class UserService {
     try {
       // Delete user data
       await _firestore.collection('users').doc(userId).delete();
-      
+
       // Delete user's memes
       final memesQuery = await _firestore
           .collection('memes')
           .where('userId', isEqualTo: userId)
           .get();
-      
+
       for (var doc in memesQuery.docs) {
         await doc.reference.delete();
       }

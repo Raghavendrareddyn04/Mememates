@@ -4,12 +4,320 @@ import '../models/meme_post.dart';
 import 'cloudinary_service.dart';
 import 'chat_service.dart';
 
-// Update the MemeService class with optimized methods
 class MemeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CloudinaryService _cloudinaryService = CloudinaryService();
   final ChatService _chatService = ChatService();
   final UserMemeInteractions _memeInteractions = UserMemeInteractions();
+
+  // Get meme feed for a user (excluding their own memes and liked/passed memes)
+  Stream<List<MemePost>> getMemesFeed(
+    String userId, {
+    int? minAge,
+    int? maxAge,
+    String? preferredGender,
+  }) {
+    return _firestore
+        .collection('memes')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final memes = <MemePost>[];
+
+      // Get user's liked and passed memes
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final likedMemeIds =
+          List<String>.from(userDoc.data()?['likedMemes'] ?? []);
+      final passedMemeIds =
+          List<String>.from(userDoc.data()?['passedMemes'] ?? []);
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final postUserId = data['userId'] as String;
+        final memeId = doc.id;
+
+        // Skip if this is user's own meme or already liked/passed
+        if (postUserId == userId ||
+            likedMemeIds.contains(memeId) ||
+            passedMemeIds.contains(memeId)) {
+          continue;
+        }
+
+        // Get poster's profile for filtering
+        final posterDoc =
+            await _firestore.collection('users').doc(postUserId).get();
+        final posterData = posterDoc.data();
+
+        if (posterData != null) {
+          final posterAge = posterData['age'] as int?;
+          final posterGender = posterData['gender'] as String?;
+
+          // Apply age and gender filters
+          if (minAge != null &&
+              maxAge != null &&
+              posterAge != null &&
+              (posterAge < minAge || posterAge > maxAge)) {
+            continue;
+          }
+
+          if (preferredGender != null &&
+              preferredGender != 'All' &&
+              posterGender != preferredGender) {
+            continue;
+          }
+
+          memes.add(MemePost(
+            id: memeId,
+            userId: postUserId,
+            userName: data['userName'] ?? '',
+            memeUrl: data['memeUrl'] ?? '',
+            caption: data['caption'] ?? '',
+            songUrl: data['songUrl'],
+            songTitle: data['songTitle'],
+            artistName: data['artistName'],
+            createdAt:
+                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
+            passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
+            userProfileImage: posterData['profileImage'],
+          ));
+        }
+      }
+
+      return memes;
+    });
+  }
+
+  // Post a new meme and update streak
+  Future<void> postMeme({
+    required String userId,
+    required String userName,
+    required String imagePath,
+    required String caption,
+    String? songUrl,
+    String? songTitle,
+    String? artistName,
+  }) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userProfileImage = userDoc.data()?['profileImage'] as String?;
+      final lastPosted = userDoc.data()?['lastPosted'] as Timestamp?;
+      final currentStreak = userDoc.data()?['memeStreak'] ?? 0;
+
+      // Calculate streak
+      int newStreak = currentStreak;
+      if (lastPosted != null) {
+        final difference = DateTime.now().difference(lastPosted.toDate());
+        if (difference.inDays == 1) {
+          // Posted consecutive day - increase streak
+          newStreak++;
+        } else if (difference.inDays > 1) {
+          // Missed a day - reset streak
+          newStreak = 1;
+        }
+      } else {
+        // First post
+        newStreak = 1;
+      }
+
+      // Upload meme image
+      final memeUrl = await _cloudinaryService.uploadImage(imagePath);
+
+      // Create meme document
+      final memeRef = await _firestore.collection('memes').add({
+        'userId': userId,
+        'userName': userName,
+        'memeUrl': memeUrl,
+        'caption': caption,
+        'songUrl': songUrl,
+        'songTitle': songTitle,
+        'artistName': artistName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'likedByUsers': [],
+        'passedByUsers': [],
+        'userProfileImage': userProfileImage,
+      });
+
+      // Update user's streak and last posted time
+      await _firestore.collection('users').doc(userId).update({
+        'lastPosted': FieldValue.serverTimestamp(),
+        'memeStreak': newStreak,
+        'postedMemes': FieldValue.arrayUnion([memeRef.id])
+      });
+    } catch (e) {
+      throw 'Failed to post meme: $e';
+    }
+  }
+
+  // Like meme and store in user's liked memes
+  Future<void> likeMeme(String memeId, String userId) async {
+    try {
+      final batch = _firestore.batch();
+      final memeRef = _firestore.collection('memes').doc(memeId);
+      final userRef = _firestore.collection('users').doc(userId);
+
+      batch.update(memeRef, {
+        'likedByUsers': FieldValue.arrayUnion([userId]),
+      });
+
+      batch.update(userRef, {
+        'likedMemes': FieldValue.arrayUnion([memeId])
+      });
+
+      await batch.commit();
+      await _handleLikeBackground(memeId, userId);
+    } catch (e) {
+      throw 'Failed to like meme: $e';
+    }
+  }
+
+  // Pass meme and store in user's passed memes
+  Future<void> passMeme(String memeId, String userId) async {
+    try {
+      final batch = _firestore.batch();
+      final memeRef = _firestore.collection('memes').doc(memeId);
+      final userRef = _firestore.collection('users').doc(userId);
+
+      batch.update(memeRef, {
+        'passedByUsers': FieldValue.arrayUnion([userId]),
+      });
+
+      batch.update(userRef, {
+        'passedMemes': FieldValue.arrayUnion([memeId])
+      });
+
+      await batch.commit();
+    } catch (e) {
+      throw 'Failed to pass meme: $e';
+    }
+  }
+
+  // Get user's streak info with timer
+  Future<Map<String, dynamic>> getUserStreakInfo(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final lastPosted = userDoc.data()?['lastPosted'] as Timestamp?;
+      final currentStreak = userDoc.data()?['memeStreak'] ?? 0;
+
+      final now = DateTime.now();
+      final lastPostDate = lastPosted?.toDate() ?? now;
+      final difference = now.difference(lastPostDate);
+
+      // Calculate hours remaining in the day
+      final hoursRemaining = 24 - difference.inHours;
+
+      // Check if streak is still active
+      final isStreakActive = difference.inHours < 24;
+
+      // If more than 24 hours have passed, streak should be reset
+      if (!isStreakActive && currentStreak > 0) {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .update({'memeStreak': 0});
+        return {
+          'streak': 0,
+          'lastPosted': lastPosted,
+          'hoursRemaining': 0,
+          'isStreakActive': false
+        };
+      }
+
+      return {
+        'streak': currentStreak,
+        'lastPosted': lastPosted,
+        'hoursRemaining': hoursRemaining,
+        'isStreakActive': isStreakActive
+      };
+    } catch (e) {
+      throw 'Failed to get streak info: $e';
+    }
+  }
+
+  // Get user's memes
+  Stream<List<MemePost>> getUserMemes(String userId) {
+    return _firestore
+        .collection('memes')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return MemePost(
+                id: doc.id,
+                userId: data['userId'],
+                userName: data['userName'] ?? '',
+                memeUrl: data['memeUrl'] ?? '',
+                caption: data['caption'] ?? '',
+                songUrl: data['songUrl'],
+                songTitle: data['songTitle'],
+                artistName: data['artistName'],
+                createdAt: (data['createdAt'] as Timestamp?)?.toDate() ??
+                    DateTime.now(),
+                likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
+                passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
+                userProfileImage: data['userProfileImage'],
+              );
+            }).toList());
+  }
+
+  // Get user's liked memes
+  Future<List<MemePost>> getLikedMemes(String userId) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final likedMemeIds =
+          List<String>.from(userDoc.data()?['likedMemes'] ?? []);
+
+      final memes = <MemePost>[];
+      for (final memeId in likedMemeIds) {
+        final memeDoc = await _firestore.collection('memes').doc(memeId).get();
+        if (memeDoc.exists) {
+          final data = memeDoc.data()!;
+          memes.add(MemePost(
+            id: memeDoc.id,
+            userId: data['userId'],
+            userName: data['userName'] ?? '',
+            memeUrl: data['memeUrl'] ?? '',
+            caption: data['caption'] ?? '',
+            songUrl: data['songUrl'],
+            songTitle: data['songTitle'],
+            artistName: data['artistName'],
+            createdAt:
+                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
+            passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
+            userProfileImage: data['userProfileImage'],
+          ));
+        }
+      }
+      return memes;
+    } catch (e) {
+      throw 'Failed to get liked memes: $e';
+    }
+  }
+
+  // Remove meme from liked memes
+  Future<void> removeLikedMeme(String memeId, String userId) async {
+    try {
+      final batch = _firestore.batch();
+      final memeRef = _firestore.collection('memes').doc(memeId);
+      final userRef = _firestore.collection('users').doc(userId);
+
+      batch.update(memeRef, {
+        'likedByUsers': FieldValue.arrayRemove([userId]),
+      });
+
+      batch.update(userRef, {
+        'likedMemes': FieldValue.arrayRemove([memeId])
+      });
+
+      await batch.commit();
+    } catch (e) {
+      throw 'Failed to remove liked meme: $e';
+    }
+  }
+
+  // Get mutual likes for vibe matches
   Future<List<UserProfile>> getMutualLikes(String userId) async {
     try {
       // Get users who liked my memes
@@ -25,14 +333,16 @@ class MemeService {
       }
 
       // Get users whose memes I liked
-      final theirMemesQuery = await _firestore
-          .collection('memes')
-          .where('likedByUsers', arrayContains: userId)
-          .get();
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final myLikedMemes =
+          List<String>.from(userDoc.data()?['likedMemes'] ?? []);
 
       final iLikedUsers = <String>{};
-      for (var doc in theirMemesQuery.docs) {
-        iLikedUsers.add(doc.data()['userId'] as String);
+      for (final memeId in myLikedMemes) {
+        final memeDoc = await _firestore.collection('memes').doc(memeId).get();
+        if (memeDoc.exists) {
+          iLikedUsers.add(memeDoc.data()!['userId'] as String);
+        }
       }
 
       // Find mutual likes
@@ -65,265 +375,6 @@ class MemeService {
     }
   }
 
-  Future<List<MemePost>> getLikedMemes(String userId) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('memes')
-          .where('likedByUsers', arrayContains: userId)
-          .get();
-
-      return querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        return MemePost(
-          id: doc.id,
-          userId: data['userId'],
-          userName: data['userName'] ?? '',
-          memeUrl: data['memeUrl'] ?? '',
-          caption: data['caption'] ?? '',
-          songUrl: data['songUrl'],
-          songTitle: data['songTitle'],
-          artistName: data['artistName'],
-          createdAt:
-              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-          passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-          userProfileImage: data['userProfileImage'],
-        );
-      }).toList();
-    } catch (e) {
-      throw 'Failed to get liked memes: $e';
-    }
-  }
-
-// Update the getMemesFeed method to include filtering
-  Stream<List<MemePost>> getMemesFeed(
-    String userId, {
-    int? minAge,
-    int? maxAge,
-    String? preferredGender,
-  }) {
-    return _firestore
-        .collection('memes')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      final memes = <MemePost>[];
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final postUserId = data['userId'] as String;
-
-        // Skip if this is the user's own meme
-        if (postUserId == userId) continue;
-
-        // Get poster's profile for filtering
-        final posterDoc =
-            await _firestore.collection('users').doc(postUserId).get();
-        final posterData = posterDoc.data();
-
-        // Apply filters
-        if (posterData != null) {
-          final posterAge = posterData['age'] as int?;
-          final posterGender = posterData['gender'] as String?;
-
-          // Skip if doesn't match age filter
-          if (minAge != null &&
-              maxAge != null &&
-              posterAge != null &&
-              (posterAge < minAge || posterAge > maxAge)) {
-            continue;
-          }
-
-          // Skip if doesn't match gender filter
-          if (preferredGender != null &&
-              preferredGender != 'All' &&
-              posterGender != preferredGender) {
-            continue;
-          }
-
-          memes.add(MemePost(
-            id: doc.id,
-            userId: postUserId,
-            userName: data['userName'] ?? '',
-            memeUrl: data['memeUrl'] ?? '',
-            caption: data['caption'] ?? '',
-            songUrl: data['songUrl'],
-            songTitle: data['songTitle'],
-            artistName: data['artistName'],
-            createdAt:
-                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-            passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-            userProfileImage: posterData['profileImage'],
-          ));
-        }
-      }
-
-      return memes
-          .where((meme) => !meme.passedByUsers.contains(userId))
-          .toList();
-    });
-  }
-
-  // Post a new meme
-  Future<void> postMeme({
-    required String userId,
-    required String userName,
-    required String imagePath,
-    required String caption,
-    String? songUrl,
-    String? songTitle,
-    String? artistName,
-  }) async {
-    try {
-      // Get user profile image from Auth
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      final userProfileImage = userDoc.data()?['profileImage'] as String?;
-
-      // Upload meme image to Cloudinary
-      final memeUrl = await _cloudinaryService.uploadImage(imagePath);
-
-      // Save meme data to Firestore
-      await _firestore.collection('memes').add({
-        'userId': userId,
-        'userName': userName,
-        'memeUrl': memeUrl,
-        'caption': caption,
-        'songUrl': songUrl,
-        'songTitle': songTitle,
-        'artistName': artistName,
-        'createdAt': FieldValue.serverTimestamp(),
-        'likedByUsers': [],
-        'passedByUsers': [],
-        'userProfileImage': userProfileImage,
-      });
-    } catch (e) {
-      throw 'Failed to post meme: $e';
-    }
-  }
-
-  // Get meme feed for a user (excluding their own memes)
-  Stream<List<MemePost>> getMemesFeedWithAgeFilter(String userId,
-      {required int minAge, required int maxAge, String? preferredGender}) {
-    return _firestore
-        .collection('memes')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      final memes = <MemePost>[];
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final postUserId = data['userId'] as String;
-
-        // Skip if this is the user's own meme
-        if (postUserId == userId) continue;
-
-        // Get the latest profile image
-        final userDoc =
-            await _firestore.collection('users').doc(postUserId).get();
-        final userData = userDoc.data();
-        final latestProfileImage = userData?['profileImage'] as String?;
-
-        if (latestProfileImage != null && latestProfileImage.isNotEmpty) {
-          await doc.reference.update({'userProfileImage': latestProfileImage});
-        }
-
-        memes.add(MemePost(
-          id: doc.id,
-          userId: postUserId,
-          userName: data['userName'] ?? '',
-          memeUrl: data['memeUrl'] ?? '',
-          caption: data['caption'] ?? '',
-          songUrl: data['songUrl'],
-          songTitle: data['songTitle'],
-          artistName: data['artistName'],
-          createdAt:
-              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-          passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-          userProfileImage: latestProfileImage,
-        ));
-      }
-
-      return memes
-          .where((meme) => !meme.passedByUsers.contains(userId))
-          .toList();
-    });
-  }
-
-  // Get user's memes for profile
-  Stream<List<MemePost>> getUserMemes(String userId) {
-    return _firestore
-        .collection('memes')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return MemePost(
-                id: doc.id,
-                userId: data['userId'],
-                userName: data['userName'] ?? '',
-                memeUrl: data['memeUrl'] ?? '',
-                caption: data['caption'] ?? '',
-                songUrl: data['songUrl'],
-                songTitle: data['songTitle'],
-                artistName: data['artistName'],
-                createdAt: (data['createdAt'] as Timestamp?)?.toDate() ??
-                    DateTime.now(),
-                likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-                passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-                userProfileImage: data['userProfileImage'],
-              );
-            }).toList());
-  }
-
-  // Get single meme by ID
-  Future<MemePost?> getMemeById(String memeId) async {
-    try {
-      final doc = await _firestore.collection('memes').doc(memeId).get();
-      if (!doc.exists) return null;
-
-      final data = doc.data()!;
-      return MemePost(
-        id: doc.id,
-        userId: data['userId'],
-        userName: data['userName'] ?? '',
-        memeUrl: data['memeUrl'] ?? '',
-        caption: data['caption'] ?? '',
-        songUrl: data['songUrl'],
-        songTitle: data['songTitle'],
-        artistName: data['artistName'],
-        createdAt:
-            (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-        likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-        passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-        userProfileImage: data['userProfileImage'],
-      );
-    } catch (e) {
-      throw 'Failed to get meme: $e';
-    }
-  }
-
-  // Optimized like meme method
-  Future<void> likeMeme(String memeId, String userId) async {
-    // Start a batch write
-    final batch = _firestore.batch();
-    final memeRef = _firestore.collection('memes').doc(memeId);
-
-    // Add user to likedByUsers immediately
-    batch.update(memeRef, {
-      'likedByUsers': FieldValue.arrayUnion([userId]),
-    });
-
-    // Commit the batch
-    await batch.commit();
-
-    // Handle chat creation and mutual like check in the background
-    _handleLikeBackground(memeId, userId);
-  }
-
   // Background processing for like
   Future<void> _handleLikeBackground(String memeId, String userId) async {
     try {
@@ -344,16 +395,8 @@ class MemeService {
         }
       }
     } catch (e) {
-      // Log error but don't throw - this is background processing
       print('Background like processing error: $e');
     }
-  }
-
-  // Optimized pass meme method
-  Future<void> passMeme(String memeId, String userId) async {
-    await _firestore.collection('memes').doc(memeId).update({
-      'passedByUsers': FieldValue.arrayUnion([userId]),
-    });
   }
 }
 

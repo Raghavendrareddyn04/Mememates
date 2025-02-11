@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../models/user_profile.dart';
 import '../services/meme_service.dart';
 import '../services/auth_service.dart';
+import '../services/chat_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final UserProfile profile;
@@ -17,24 +19,62 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final _chatService = ChatService();
   final _memeService = UserMemeInteractions();
   final _authService = AuthService();
   bool _canChat = false;
   bool _isLoading = true;
-  final List<ChatMessage> _messages = [];
+  String? _chatId;
+  Timer? _expirationTimer;
 
   @override
   void initState() {
     super.initState();
-    _checkChatPermission();
+    _initializeChat();
   }
 
-  Future<void> _checkChatPermission() async {
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _expirationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeChat() async {
     setState(() => _isLoading = true);
     try {
       final currentUser = _authService.currentUser;
       if (currentUser != null) {
-        // Check if both users have liked each other's memes
+        // Get or create chat ID
+        _chatId = await _chatService.getChatId(
+            currentUser.uid, widget.profile.userId);
+        await _checkChatPermission();
+        _startCleanupTimer();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error initializing chat: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _startCleanupTimer() {
+    // Run cleanup every hour
+    _expirationTimer = Timer.periodic(const Duration(hours: 1), (timer) {
+      _chatService.cleanupExpiredMessages();
+    });
+  }
+
+  Future<void> _checkChatPermission() async {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
         final otherUserLikedMyMeme = await _memeService.hasUserLikedMyMeme(
           currentUser.uid,
           widget.profile.userId,
@@ -46,28 +86,45 @@ class _ChatScreenState extends State<ChatScreen> {
 
         setState(() {
           _canChat = otherUserLikedMyMeme && iLikedOtherUserMeme;
-          _isLoading = false;
         });
+
+        if (_canChat && _chatId != null) {
+          await _chatService.markChatAsRead(
+            chatId: _chatId!,
+            userId: currentUser.uid,
+          );
+        }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error checking chat permission: $e')),
+        );
+      }
     }
   }
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty || !_canChat) return;
+  void _sendMessage() async {
+    if (_messageController.text.trim().isEmpty || !_canChat || _chatId == null)
+      return;
 
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          type: MessageType.text,
-          content: _messageController.text,
-          isMe: true,
-          timestamp: DateTime.now(),
-        ),
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await _chatService.sendMessage(
+        chatId: _chatId!,
+        senderId: currentUser.uid,
+        content: _messageController.text,
       );
       _messageController.clear();
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sending message: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -85,7 +142,32 @@ class _ChatScreenState extends State<ChatScreen> {
                   : null,
             ),
             const SizedBox(width: 8),
-            Text(widget.profile.name),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.profile.name),
+                if (_chatId != null)
+                  StreamBuilder<List<ChatMessage>>(
+                    stream: _chatService.getChatMessages(_chatId!),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const SizedBox();
+                      }
+                      final messages = snapshot.data!;
+                      final expiresAt = messages.first.expiresAt;
+                      final remaining = expiresAt.difference(DateTime.now());
+
+                      return Text(
+                        'Messages expire in ${remaining.inHours}h ${remaining.inMinutes % 60}m',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -127,45 +209,86 @@ class _ChatScreenState extends State<ChatScreen> {
               : Column(
                   children: [
                     Expanded(
-                      child: _messages.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.chat_bubble_outline,
-                                    size: 64,
-                                    color: Colors.grey,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Start chatting with ${widget.profile.name}!',
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              reverse: true,
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _messages.length,
-                              itemBuilder: (context, index) {
-                                final message =
-                                    _messages[_messages.length - 1 - index];
-                                return _MessageBubble(message: message);
+                      child: _chatId == null
+                          ? const Center(child: Text('Chat not initialized'))
+                          : StreamBuilder<List<ChatMessage>>(
+                              stream: _chatService.getChatMessages(_chatId!),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  return Center(
+                                    child: Text('Error: ${snapshot.error}'),
+                                  );
+                                }
+
+                                if (!snapshot.hasData) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+
+                                final messages = snapshot.data!;
+                                return ListView.builder(
+                                  reverse: true,
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: messages.length,
+                                  itemBuilder: (context, index) {
+                                    final message = messages[index];
+                                    final isMe = message.senderId ==
+                                        _authService.currentUser?.uid;
+
+                                    return Align(
+                                      alignment: isMe
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 4),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isMe
+                                              ? Colors.deepPurple
+                                              : Colors.grey.shade200,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              message.content,
+                                              style: TextStyle(
+                                                color: isMe
+                                                    ? Colors.white
+                                                    : Colors.black,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _formatTime(message.timestamp),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isMe
+                                                    ? Colors.white70
+                                                    : Colors.black54,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
                               },
                             ),
                     ),
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.black,
+                        color: Colors.white,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.black.withOpacity(0.1),
                             blurRadius: 4,
                           ),
                         ],
@@ -198,68 +321,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
     );
   }
-}
-
-class _MessageBubble extends StatelessWidget {
-  final ChatMessage message;
-
-  const _MessageBubble({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: message.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: message.isMe ? Colors.deepPurple : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.content,
-              style: TextStyle(
-                color: message.isMe ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _formatTime(message.timestamp),
-              style: TextStyle(
-                fontSize: 12,
-                color: message.isMe ? Colors.white70 : Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   String _formatTime(DateTime time) {
     return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
   }
-}
-
-enum MessageType {
-  text,
-  meme,
-  song,
-}
-
-class ChatMessage {
-  final MessageType type;
-  final String content;
-  final bool isMe;
-  final DateTime timestamp;
-
-  ChatMessage({
-    required this.type,
-    required this.content,
-    required this.isMe,
-    required this.timestamp,
-  });
 }
