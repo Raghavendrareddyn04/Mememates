@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -87,24 +86,6 @@ class AuthService {
     }
   }
 
-  // Sign in with Facebook
-  Future<UserCredential> signInWithFacebook() async {
-    try {
-      final LoginResult result = await FacebookAuth.instance.login();
-      if (result.status != LoginStatus.success) {
-        throw 'Facebook sign in failed';
-      }
-
-      final OAuthCredential credential = FacebookAuthProvider.credential(
-        result.accessToken!.token,
-      );
-
-      return await _auth.signInWithCredential(credential);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
   // Sign out
   Future<void> signOut() async {
     try {
@@ -114,10 +95,6 @@ class AuthService {
           await _googleSignIn.signOut();
         } catch (_) {}
       }
-
-      try {
-        await FacebookAuth.instance.logOut();
-      } catch (_) {}
 
       // Clear any cached Firestore data
       await _firestore.terminate();

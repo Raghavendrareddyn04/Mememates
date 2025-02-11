@@ -3,17 +3,23 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final _encryptionKey = encrypt.Key.fromSecureRandom(32);
-  final _iv = encrypt.IV.fromSecureRandom(16);
+
+  // Use static encryption key and IV to ensure consistency
+  static final _encryptionKey = encrypt.Key.fromLength(32);
+  static final _iv = encrypt.IV.fromLength(16);
+  static final _encrypter = encrypt.Encrypter(encrypt.AES(_encryptionKey));
 
   String _encryptMessage(String message) {
-    final encrypter = encrypt.Encrypter(encrypt.AES(_encryptionKey));
-    return encrypter.encrypt(message, iv: _iv).base64;
+    return _encrypter.encrypt(message, iv: _iv).base64;
   }
 
   String _decryptMessage(String encryptedMessage) {
-    final encrypter = encrypt.Encrypter(encrypt.AES(_encryptionKey));
-    return encrypter.decrypt64(encryptedMessage, iv: _iv);
+    try {
+      return _encrypter.decrypt64(encryptedMessage, iv: _iv);
+    } catch (e) {
+      // Return original message if decryption fails
+      return encryptedMessage;
+    }
   }
 
   Future<String> getChatId(String userId1, String userId2) async {

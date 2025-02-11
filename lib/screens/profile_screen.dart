@@ -3,113 +3,7 @@ import '../services/user_service.dart';
 import '../services/meme_service.dart';
 import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
-
-class _StreakTimer extends StatelessWidget {
-  final int hoursRemaining;
-  final int currentStreak;
-  final bool isStreakActive;
-
-  const _StreakTimer({
-    required this.hoursRemaining,
-    required this.currentStreak,
-    required this.isStreakActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isStreakActive ? Icons.local_fire_department : Icons.timer,
-                color: isStreakActive ? Colors.orange : Colors.red,
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Streak: $currentStreak',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          if (!isStreakActive) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Post a meme in ${hoursRemaining}h to keep your streak!',
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LikedMemesGrid extends StatelessWidget {
-  final List<MemePost> memes;
-  final Function(String) onPass;
-
-  const _LikedMemesGrid({
-    required this.memes,
-    required this.onPass,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1,
-      ),
-      itemCount: memes.length,
-      itemBuilder: (context, index) {
-        final meme = memes[index];
-        return Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(
-                  image: NetworkImage(meme.memeUrl),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: const Icon(Icons.close),
-                color: Colors.white,
-                onPressed: () => onPass(meme.id),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -121,7 +15,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _userService = UserService();
   final _memeService = MemeService();
-  bool _isLoading = false;
+  bool _isLoading = true;
   Map<String, dynamic>? _userProfile;
   Map<String, dynamic>? _streakInfo;
   List<MemePost> _likedMemes = [];
@@ -151,10 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading profile: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error loading profile: $e')),
         );
       }
     } finally {
@@ -211,23 +102,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _handlePassMeme(String memeId) async {
-    try {
-      final currentUser = _userService.currentUser;
-      if (currentUser != null) {
-        await _memeService.passMeme(memeId, currentUser.uid);
-        await _memeService.removeLikedMeme(memeId, currentUser.uid);
-        await _loadLikedMemes();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error passing meme: $e')),
-        );
-      }
-    }
-  }
-
   void _openEditProfile() {
     Navigator.push(
       context,
@@ -242,6 +116,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -250,281 +133,480 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    final currentUser = _userService.currentUser;
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.width < 600;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _openEditProfile,
-          ),
-        ],
-      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
+              Colors.pink.shade900,
+              Colors.purple.shade900,
               Colors.deepPurple.shade900,
-              Colors.deepPurple.shade700,
-              Colors.purple.shade500,
             ],
           ),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      backgroundImage: _userProfile?['profileImage'] != null
-                          ? NetworkImage(_userProfile!['profileImage'])
-                          : null,
-                      child: _userProfile?['profileImage'] == null
-                          ? const Icon(
-                              Icons.person,
-                              size: 60,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Profile Header
+                Container(
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(30),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Profile',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 24 : 32,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _userProfile?['name'] ?? 'Not set',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_streakInfo != null) ...[
-                const SizedBox(height: 24),
-                _StreakTimer(
-                  hoursRemaining: _streakInfo!['hoursRemaining'],
-                  currentStreak: _streakInfo!['streak'],
-                  isStreakActive: _streakInfo!['isStreakActive'],
-                ),
-              ],
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _showPostedMemes = true),
-                    child: _buildStatCard(
-                      icon: Icons.post_add,
-                      label: 'Posted',
-                      value: _postedMemesCount.toString(),
-                      isSelected: _showPostedMemes,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => setState(() => _showPostedMemes = false),
-                    child: _buildStatCard(
-                      icon: Icons.favorite,
-                      label: 'Liked',
-                      value: _likedMemesCount.toString(),
-                      isSelected: !_showPostedMemes,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _buildInfoCard(
-                title: 'Age',
-                content: _userProfile?['age']?.toString() ?? 'Not set',
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                title: 'Gender',
-                content: _userProfile?['gender'] ?? 'Not set',
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                title: 'Interested In',
-                content: _userProfile?['preferredGender'] ?? 'Not set',
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                title: 'Bio',
-                content: _userProfile?['bio'] ?? 'No bio yet',
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                title: 'Interests',
-                content: (_userProfile?['interests'] as List<dynamic>?)
-                        ?.join(', ') ??
-                    'No interests added',
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Mood Board',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_userProfile?['moodBoardImages'] != null)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: (_userProfile!['moodBoardImages'] as List).length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        image: DecorationImage(
-                          image: NetworkImage(
-                            _userProfile!['moodBoardImages'][index],
+                            ),
                           ),
-                          fit: BoxFit.cover,
+                          Row(
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _openEditProfile,
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Edit'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.pink,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: _openSettings,
+                                icon: const Icon(Icons.settings,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      CircleAvatar(
+                        radius: isSmallScreen ? 50 : 60,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        backgroundImage: _userProfile?['profileImage'] != null
+                            ? NetworkImage(_userProfile!['profileImage'])
+                            : null,
+                        child: _userProfile?['profileImage'] == null
+                            ? Icon(
+                                Icons.person,
+                                size: isSmallScreen ? 50 : 60,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _userProfile?['name'] ?? 'Not set',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 24 : 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 24),
-              _buildInfoCard(
-                title: 'Anthem',
-                content: _userProfile?['anthem'] ?? 'No anthem selected',
-                icon: Icons.music_note,
-              ),
-              if (_userProfile?['artistName'] != null) ...[
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  title: 'Artist',
-                  content: _userProfile!['artistName'],
-                  icon: Icons.person,
-                ),
-              ],
-              if (_userProfile?['songTitle'] != null) ...[
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  title: 'Song',
-                  content: _userProfile!['songTitle'],
-                  icon: Icons.music_note,
-                ),
-              ],
-              const SizedBox(height: 24),
-              Text(
-                _showPostedMemes ? 'Your Memes' : 'Liked Memes',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_showPostedMemes)
-                StreamBuilder<List<MemePost>>(
-                  stream: _memeService.getUserMemes(currentUser!.uid),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          'Error loading memes: ${snapshot.error}',
-                          style: const TextStyle(color: Colors.white),
+                      if (_userProfile?['bio'] != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _userProfile!['bio'],
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: isSmallScreen ? 14 : 16,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                      );
-                    }
-
-                    if (!snapshot.hasData) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
-                    }
-
-                    final memes = snapshot.data!;
-                    if (memes.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No memes posted yet',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      );
-                    }
-
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 1,
+                      ],
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStatCard(
+                            icon: Icons.post_add,
+                            label: 'Posts',
+                            value: _postedMemesCount.toString(),
+                            isSelected: _showPostedMemes,
+                            onTap: () =>
+                                setState(() => _showPostedMemes = true),
+                          ),
+                          _buildStatCard(
+                            icon: Icons.favorite,
+                            label: 'Likes',
+                            value: _likedMemesCount.toString(),
+                            isSelected: !_showPostedMemes,
+                            onTap: () =>
+                                setState(() => _showPostedMemes = false),
+                          ),
+                          if (_streakInfo != null)
+                            _buildStatCard(
+                              icon: Icons.local_fire_department,
+                              label: 'Streak',
+                              value: _streakInfo!['streak'].toString(),
+                              isSelected: false,
+                              color: Colors.orange,
+                            ),
+                        ],
                       ),
-                      itemCount: memes.length,
-                      itemBuilder: (context, index) =>
-                          _buildMemeCard(memes[index]),
-                    );
-                  },
-                )
-              else
-                _LikedMemesGrid(
-                  memes: _likedMemes,
-                  onPass: _handlePassMeme,
+                    ],
+                  ),
                 ),
-            ],
+                // Profile Content
+                Padding(
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSection(
+                        title: 'About',
+                        content: Column(
+                          children: [
+                            _buildInfoRow(
+                                'Age', '${_userProfile?['age'] ?? 'Not set'}'),
+                            _buildInfoRow(
+                                'Gender', _userProfile?['gender'] ?? 'Not set'),
+                            _buildInfoRow('Interested In',
+                                _userProfile?['preferredGender'] ?? 'Not set'),
+                            if (_userProfile?['bio'] != null)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Bio',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.7),
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      _userProfile!['bio'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_userProfile?['interests'] != null &&
+                          (_userProfile!['interests'] as List).isNotEmpty)
+                        _buildSection(
+                          title: 'Interests',
+                          content: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: (_userProfile!['interests'] as List)
+                                .map((interest) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.pink.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Text(
+                                  interest,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      if (_userProfile?['anthem'] != null)
+                        _buildSection(
+                          title: 'Music',
+                          content: Column(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Column(
+                                  children: [
+                                    ListTile(
+                                      leading: Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: Colors.pink.withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: const Icon(
+                                          Icons.music_note,
+                                          color: Colors.pink,
+                                        ),
+                                      ),
+                                      title: const Text(
+                                        'Anthem',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        _userProfile!['anthem'],
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_userProfile?['artistName'] != null)
+                                      ListTile(
+                                        leading: Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.purple.withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(
+                                            Icons.person,
+                                            color: Colors.purple,
+                                          ),
+                                        ),
+                                        title: const Text(
+                                          'Artist',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          _userProfile!['artistName'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    if (_userProfile?['songTitle'] != null)
+                                      ListTile(
+                                        leading: Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: Colors.deepPurple
+                                                .withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(
+                                            Icons.audiotrack,
+                                            color: Colors.deepPurple,
+                                          ),
+                                        ),
+                                        title: const Text(
+                                          'Song',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          _userProfile!['songTitle'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      if (_userProfile?['anthem'] != null)
+                        _buildSection(
+                          title: 'Anthem',
+                          content: ListTile(
+                            tileColor: Colors.white.withOpacity(0.1),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            leading: const Icon(Icons.music_note,
+                                color: Colors.pink),
+                            title: Text(
+                              _userProfile!['anthem'],
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              _userProfile!['artistName'] ?? '',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7)),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      _buildSection(
+                        title: 'Mood Board',
+                        content: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: isSmallScreen ? 3 : 4,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                          itemCount: (_userProfile?['moodBoardImages'] as List?)
+                                  ?.length ??
+                              0,
+                          itemBuilder: (context, index) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(15),
+                                image: DecorationImage(
+                                  image: NetworkImage(
+                                      _userProfile!['moodBoardImages'][index]),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSection(
+                        title: _showPostedMemes ? 'Your Memes' : 'Liked Memes',
+                        content: _showPostedMemes
+                            ? StreamBuilder<List<MemePost>>(
+                                stream: _memeService.getUserMemes(
+                                    _userService.currentUser!.uid),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const Center(
+                                        child: CircularProgressIndicator());
+                                  }
+                                  return GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: isSmallScreen ? 2 : 3,
+                                      crossAxisSpacing: 8,
+                                      mainAxisSpacing: 8,
+                                    ),
+                                    itemCount: snapshot.data!.length,
+                                    itemBuilder: (context, index) =>
+                                        _buildMemeCard(snapshot.data![index]),
+                                  );
+                                },
+                              )
+                            : GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: isSmallScreen ? 2 : 3,
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                ),
+                                itemCount: _likedMemes.length,
+                                itemBuilder: (context, index) =>
+                                    _buildMemeCard(_likedMemes[index]),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInfoCard({
-    required String title,
-    required String content,
-    IconData? icon,
-  }) {
+  Widget _buildSection({required String title, required Widget content}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 16),
+        content,
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(15),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: Colors.white70),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           Text(
-            content,
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            value,
             style: const TextStyle(
-              fontSize: 18,
               color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -537,33 +619,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String label,
     required String value,
     required bool isSelected,
+    Color? color,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.deepPurple : Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.pink : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: color ?? Colors.white,
+              size: 24,
             ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -571,7 +662,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildMemeCard(MemePost meme) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(15),
         image: DecorationImage(
           image: NetworkImage(meme.memeUrl),
           fit: BoxFit.cover,
@@ -579,7 +670,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(15),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
