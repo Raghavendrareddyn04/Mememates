@@ -145,7 +145,6 @@ class ChatService {
       }
 
       final encryptedContent = _encryptMessage(content);
-      final now = DateTime.now();
 
       final batch = _firestore.batch();
       final chatRef = _firestore.collection('chats').doc(chatId);
@@ -155,7 +154,6 @@ class ChatService {
         'lastMessage': encryptedContent,
         'lastMessageTime': FieldValue.serverTimestamp(),
         'readBy': [senderId],
-        'expiresAt': now.add(const Duration(days: 1)),
       });
 
       // Add message document
@@ -164,7 +162,8 @@ class ChatService {
         'senderId': senderId,
         'content': encryptedContent,
         'timestamp': FieldValue.serverTimestamp(),
-        'expiresAt': now.add(const Duration(days: 1)),
+        'readBy': [senderId],
+        'expiresAt': DateTime.now().add(const Duration(days: 1)),
       });
 
       await batch.commit();
@@ -178,8 +177,6 @@ class ChatService {
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .where('expiresAt', isGreaterThan: DateTime.now())
-        .orderBy('expiresAt', descending: true)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -190,6 +187,7 @@ class ChatService {
           senderId: data['senderId'],
           content: _decryptMessage(data['content']),
           timestamp: (data['timestamp'] as Timestamp).toDate(),
+          readBy: List<String>.from(data['readBy'] ?? []),
           expiresAt: (data['expiresAt'] as Timestamp).toDate(),
         );
       }).toList();
@@ -201,27 +199,46 @@ class ChatService {
     required String userId,
   }) async {
     try {
-      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-      final lastViewed =
-          Map<String, dynamic>.from(chatDoc.data()?['lastViewed'] ?? {});
-      lastViewed[userId] = FieldValue.serverTimestamp();
+      final batch = _firestore.batch();
+      final chatRef = _firestore.collection('chats').doc(chatId);
 
-      await _firestore.collection('chats').doc(chatId).update({
+      // Update chat document
+      batch.update(chatRef, {
         'readBy': FieldValue.arrayUnion([userId]),
-        'lastViewed': lastViewed,
+        'lastViewed.$userId': FieldValue.serverTimestamp(),
       });
 
-      // Check if all participants have viewed the chat
+      // Get all unread messages
+      final unreadMessages = await chatRef
+          .collection('messages')
+          .where('readBy', arrayContains: userId, isEqualTo: false)
+          .get();
+
+      // Mark each message as read
+      for (var doc in unreadMessages.docs) {
+        batch.update(doc.reference, {
+          'readBy': FieldValue.arrayUnion([userId]),
+        });
+      }
+
+      await batch.commit();
+
+      // Check if both users have read all messages
+      final chatDoc = await chatRef.get();
       final participants =
           List<String>.from(chatDoc.data()?['participants'] ?? []);
-      final allViewed = participants
-          .every((participant) => lastViewed.containsKey(participant));
+      final lastViewed =
+          Map<String, Timestamp>.from(chatDoc.data()?['lastViewed'] ?? {});
 
-      if (allViewed) {
-        // Set expiration to 24 hours from the last person's view
-        await _firestore.collection('chats').doc(chatId).update({
+      if (participants
+          .every((participant) => lastViewed.containsKey(participant))) {
+        // Both users have viewed the messages, set expiration
+        await chatRef.update({
           'expiresAt': DateTime.now().add(const Duration(days: 1)),
         });
+
+        // Schedule cleanup
+        await cleanupExpiredMessages();
       }
     } catch (e) {
       throw 'Failed to mark chat as read: $e';
@@ -231,19 +248,17 @@ class ChatService {
   Future<void> cleanupExpiredMessages() async {
     try {
       final now = DateTime.now();
-      final chatsQuery = await _firestore
+      final expiredChatsQuery = await _firestore
           .collection('chats')
           .where('expiresAt', isLessThan: now)
           .get();
 
-      for (var chatDoc in chatsQuery.docs) {
-        // Delete expired messages
-        final messagesQuery = await chatDoc.reference
-            .collection('messages')
-            .where('expiresAt', isLessThan: now)
-            .get();
-
+      for (var chatDoc in expiredChatsQuery.docs) {
         final batch = _firestore.batch();
+
+        // Delete all messages in the chat
+        final messagesQuery =
+            await chatDoc.reference.collection('messages').get();
         for (var messageDoc in messagesQuery.docs) {
           batch.delete(messageDoc.reference);
         }
@@ -253,7 +268,8 @@ class ChatService {
           'lastMessage': '',
           'lastMessageTime': null,
           'readBy': [],
-          'active': false,
+          'expiresAt': null,
+          'active': false, // Mark chat as inactive
         });
 
         await batch.commit();
@@ -269,6 +285,7 @@ class ChatMessage {
   final String senderId;
   final String content;
   final DateTime timestamp;
+  final List<String> readBy;
   final DateTime expiresAt;
 
   ChatMessage({
@@ -276,6 +293,7 @@ class ChatMessage {
     required this.senderId,
     required this.content,
     required this.timestamp,
+    required this.readBy,
     required this.expiresAt,
   });
 }

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
@@ -95,12 +96,25 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _handleSocialLogin(Future<void> Function() loginMethod) async {
+  Future<void> _handleSocialLogin(
+      Future<UserCredential> Function() loginMethod) async {
     setState(() => _isLoading = true);
     try {
-      await loginMethod();
+      final userCredential = await loginMethod();
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+
+      // Check if user is new
+      final isNewUser = await _authService.isNewUser(userCredential.user!.uid);
+
+      if (isNewUser) {
+        if (!mounted) return;
+        // New user flow: Onboarding -> Profile Setup -> Home
+        Navigator.pushReplacementNamed(context, '/onboarding');
+      } else {
+        if (!mounted) return;
+        // Existing user: Go directly to home
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -256,15 +270,15 @@ class _LoginScreenState extends State<LoginScreen>
                         _buildSocialButton(
                           icon: Icons.g_mobiledata,
                           label: 'Continue with Google',
-                          onPressed: () =>
-                              _handleSocialLogin(_authService.signInWithGoogle),
+                          onPressed: () => _handleSocialLogin(
+                              () => _authService.signInWithGoogle()),
                         ),
                         const SizedBox(height: 12),
                         _buildSocialButton(
                           icon: Icons.facebook,
                           label: 'Continue with Facebook',
                           onPressed: () => _handleSocialLogin(
-                              _authService.signInWithFacebook),
+                              () => _authService.signInWithFacebook()),
                         ),
                         const SizedBox(height: 12),
                         const SizedBox(height: 24),
