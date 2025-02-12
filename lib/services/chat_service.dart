@@ -3,36 +3,73 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late encrypt.Encrypter _encrypter;
+  late encrypt.IV _iv;
+  bool _isInitialized = false;
 
-  // Use static encryption key and IV to ensure consistency
-  static final _encryptionKey = encrypt.Key.fromLength(32);
-  static final _iv = encrypt.IV.fromLength(16);
-  static final _encrypter = encrypt.Encrypter(encrypt.AES(_encryptionKey));
+  // Initialize encryption on constructor
+  ChatService() {
+    _initializeEncryption();
+  }
+
+  void _initializeEncryption() {
+    if (_isInitialized) return;
+
+    try {
+      // Use a fixed key and IV for consistency
+      final key = encrypt.Key.fromUtf8('mememates_secure_key_32_bytes_123!');
+      _iv = encrypt.IV.fromLength(16);
+      _encrypter = encrypt.Encrypter(encrypt.AES(key));
+      _isInitialized = true;
+    } catch (e) {
+      print('Error initializing encryption: $e');
+      // Fallback to a simpler key if needed
+      final fallbackKey = encrypt.Key.fromLength(32);
+      _iv = encrypt.IV.fromLength(16);
+      _encrypter = encrypt.Encrypter(encrypt.AES(fallbackKey));
+      _isInitialized = true;
+    }
+  }
 
   String _encryptMessage(String message) {
-    return _encrypter.encrypt(message, iv: _iv).base64;
+    if (!_isInitialized) {
+      _initializeEncryption();
+    }
+
+    try {
+      return _encrypter.encrypt(message, iv: _iv).base64;
+    } catch (e) {
+      print('Encryption error: $e');
+      return 'UNENCRYPTED:$message';
+    }
   }
 
   String _decryptMessage(String encryptedMessage) {
+    if (!_isInitialized) {
+      _initializeEncryption();
+    }
+
     try {
-      return _encrypter.decrypt64(encryptedMessage, iv: _iv);
+      if (encryptedMessage.startsWith('UNENCRYPTED:')) {
+        return encryptedMessage.substring('UNENCRYPTED:'.length);
+      }
+
+      final encrypted = encrypt.Encrypted.fromBase64(encryptedMessage);
+      return _encrypter.decrypt(encrypted, iv: _iv);
     } catch (e) {
-      // Return original message if decryption fails
-      return encryptedMessage;
+      print('Decryption error: $e');
+      return 'Message could not be decrypted';
     }
   }
 
   Future<String> getChatId(String userId1, String userId2) async {
     try {
-      // Sort user IDs to ensure consistent chat ID
       final sortedIds = [userId1, userId2]..sort();
       final chatId = sortedIds.join('_');
 
-      // Check if chat exists
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
 
       if (!chatDoc.exists) {
-        // Create new chat
         await _firestore.collection('chats').doc(chatId).set({
           'participants': sortedIds,
           'lastMessage': '',
@@ -67,7 +104,6 @@ class ChatService {
         final participants = List<String>.from(data['participants']);
         final otherUserId = participants.firstWhere((id) => id != userId);
 
-        // Get other user's profile
         final userDoc =
             await _firestore.collection('users').doc(otherUserId).get();
         if (userDoc.exists) {
@@ -188,10 +224,13 @@ class ChatService {
         .map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
+        final encryptedContent = data['content'] as String;
+        final decryptedContent = _decryptMessage(encryptedContent);
+
         return ChatMessage(
           id: doc.id,
           senderId: data['senderId'],
-          content: _decryptMessage(data['content']),
+          content: decryptedContent,
           timestamp: (data['timestamp'] as Timestamp).toDate(),
           readBy: List<String>.from(data['readBy'] ?? []),
           expiresAt: (data['expiresAt'] as Timestamp).toDate(),

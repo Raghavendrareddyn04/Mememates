@@ -12,7 +12,8 @@ class MemePost {
   final DateTime createdAt;
   final List<String> likedByUsers;
   final List<String> passedByUsers;
-  final String? userProfileImage; // Add this field
+  final String? userProfileImage;
+  final _memeService = MemeService();
 
   MemePost({
     required this.id,
@@ -26,13 +27,15 @@ class MemePost {
     required this.createdAt,
     List<String>? likedByUsers,
     List<String>? passedByUsers,
-    this.userProfileImage, // Add this parameter
+    this.userProfileImage,
   })  : likedByUsers = likedByUsers ?? [],
         passedByUsers = passedByUsers ?? [];
 
   bool isLikedBy(String userId) => likedByUsers.contains(userId);
   bool isPassedBy(String userId) => passedByUsers.contains(userId);
-  Future<bool> canChatWith(String userId) async =>
-      likedByUsers.contains(userId) &&
-      await UserMemeInteractions().hasUserLikedMyMeme(this.userId, userId);
+
+  Future<bool> canChatWith(String userId) async {
+    return likedByUsers.contains(userId) &&
+        await _memeService.hasUserLikedMyMeme(userId, this.userId);
+  }
 }

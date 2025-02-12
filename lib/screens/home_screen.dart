@@ -594,7 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Row(
           children: [
             const Text(
-              'Meme Feed',
+              'MemeMates',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             IconButton(
@@ -661,7 +661,7 @@ class _HomeScreenState extends State<HomeScreen> {
             end: Alignment.bottomRight,
             colors: [
               Colors.pink.shade900,
-              const Color.fromARGB(255, 241, 240, 243),
+              const Color.fromARGB(255, 158, 158, 159),
               Colors.deepPurple.shade900,
             ],
           ),
@@ -704,7 +704,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: _currentIndex == 1
           ? FloatingActionButton(
               onPressed: _showPostMemeDialog,
-              backgroundColor: const Color.fromARGB(255, 199, 195, 196),
+              backgroundColor: Colors.pink,
               child: const Icon(Icons.add_photo_alternate),
             )
           : null,

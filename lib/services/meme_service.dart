@@ -8,7 +8,6 @@ class MemeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CloudinaryService _cloudinaryService = CloudinaryService();
   final ChatService _chatService = ChatService();
-  final UserMemeInteractions _memeInteractions = UserMemeInteractions();
 
   // Get meme feed for a user (excluding their own memes and liked/passed memes)
   Stream<List<MemePost>> getMemesFeed(
@@ -389,7 +388,7 @@ class MemeService {
 
         // Check for mutual like
         final hasOtherUserLikedMyMeme =
-            await _memeInteractions.hasUserLikedMyMeme(userId, memeOwnerId);
+            await hasUserLikedMyMeme(userId, memeOwnerId);
         if (hasOtherUserLikedMyMeme) {
           await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
         }
@@ -398,10 +397,6 @@ class MemeService {
       print('Background like processing error: $e');
     }
   }
-}
-
-class UserMemeInteractions {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<bool> hasUserLikedMyMeme(String myUserId, String otherUserId) async {
     final querySnapshot = await _firestore
