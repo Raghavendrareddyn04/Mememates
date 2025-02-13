@@ -5,6 +5,9 @@ import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
 import 'mood_board_editor_screen.dart';
+import '../widgets/spotify_player.dart';
+import '../widgets/spotify_track_picker.dart';
+import '../services/spotify_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _postedMemesCount = 0;
   int _likedMemesCount = 0;
   bool _showPostedMemes = true;
+  SpotifyTrack? _selectedTrack;
 
   @override
   void initState() {
@@ -126,6 +130,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showSpotifyTrackPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade900,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'Select Your Anthem',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SpotifyTrackPicker(
+                onTrackSelected: (track) async {
+                  setState(() => _selectedTrack = track);
+                  final currentUser = _userService.currentUser;
+                  if (currentUser != null) {
+                    await _userService.updateUserProfile(
+                      userId: currentUser.uid,
+                      anthem: track.uri,
+                      artistName: track.artist,
+                      songTitle: track.name,
+                      interests:
+                          List<String>.from(_userProfile?['interests'] ?? []),
+                    );
+                    await _loadUserProfile();
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMoodBoardSection(bool isSmallScreen) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,6 +259,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildMusicSection() {
+    final hasAnthem = _userProfile?['anthem'] != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Music',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _showSpotifyTrackPicker,
+              icon: const Icon(Icons.edit, color: Colors.pink),
+              label: Text(
+                hasAnthem ? 'Change Song' : 'Add Song',
+                style: const TextStyle(color: Colors.pink),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (hasAnthem)
+          SpotifyPlayer(
+            trackUri: _userProfile!['anthem'],
+            trackName: _userProfile!['songTitle'] ?? '',
+            artistName: _userProfile!['artistName'] ?? '',
+            albumArt: _selectedTrack?.albumArt ?? '',
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.music_note,
+                  size: 48,
+                  color: Colors.white.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No anthem selected',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add your favorite song to express your vibe',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -235,7 +363,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                // Profile Header
                 Container(
                   padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
                   decoration: BoxDecoration(
@@ -349,7 +476,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                // Profile Content
                 Padding(
                   padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
                   child: Column(
@@ -431,140 +557,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      if (_userProfile?['anthem'] != null)
-                        _buildSection(
-                          title: 'Music',
-                          content: Column(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Column(
-                                  children: [
-                                    ListTile(
-                                      leading: Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: Colors.pink.withOpacity(0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: const Icon(
-                                          Icons.music_note,
-                                          color: Colors.pink,
-                                        ),
-                                      ),
-                                      title: const Text(
-                                        'Anthem',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        _userProfile!['anthem'],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_userProfile?['artistName'] != null)
-                                      ListTile(
-                                        leading: Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Colors.purple.withOpacity(0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: const Icon(
-                                            Icons.person,
-                                            color: Colors.purple,
-                                          ),
-                                        ),
-                                        title: const Text(
-                                          'Artist',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          _userProfile!['artistName'],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    if (_userProfile?['songTitle'] != null)
-                                      ListTile(
-                                        leading: Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            color: Colors.deepPurple
-                                                .withOpacity(0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: const Icon(
-                                            Icons.audiotrack,
-                                            color: Colors.deepPurple,
-                                          ),
-                                        ),
-                                        title: const Text(
-                                          'Song',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          _userProfile!['songTitle'],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      if (_userProfile?['anthem'] != null)
-                        _buildSection(
-                          title: 'Anthem',
-                          content: ListTile(
-                            tileColor: Colors.white.withOpacity(0.1),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            leading: const Icon(Icons.music_note,
-                                color: Colors.pink),
-                            title: Text(
-                              _userProfile!['anthem'],
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            subtitle: Text(
-                              _userProfile!['artistName'] ?? '',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7)),
-                            ),
-                          ),
-                        ),
+                      _buildMusicSection(),
                       const SizedBox(height: 24),
                       _buildMoodBoardSection(isSmallScreen),
                       const SizedBox(height: 24),
