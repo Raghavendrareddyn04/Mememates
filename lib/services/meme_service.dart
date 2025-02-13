@@ -18,6 +18,8 @@ class MemeService {
     String? songUrl,
     String? songTitle,
     String? artistName,
+    String? topText,
+    String? bottomText,
   }) async {
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -38,8 +40,12 @@ class MemeService {
         newStreak = 1;
       }
 
-      // Upload meme image to Cloudinary
-      final memeUrl = await _cloudinaryService.uploadImage(imagePath);
+      // Upload meme image to Cloudinary with text overlays
+      final memeUrl = await _cloudinaryService.uploadImage(
+        imagePath,
+        topText: topText,
+        bottomText: bottomText,
+      );
 
       // Create meme document
       final memeRef = await _firestore.collection('memes').add({
@@ -50,6 +56,8 @@ class MemeService {
         'songUrl': songUrl,
         'songTitle': songTitle,
         'artistName': artistName,
+        'topText': topText,
+        'bottomText': bottomText,
         'createdAt': FieldValue.serverTimestamp(),
         'likedByUsers': [],
         'passedByUsers': [],

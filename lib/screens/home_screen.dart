@@ -13,6 +13,7 @@ import 'notifications_screen.dart';
 import 'premium_screen.dart';
 import 'messages_screen.dart';
 import 'vibe_match_screen.dart';
+import 'meme_creator_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -472,105 +473,47 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 maxLines: 3,
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              const SizedBox(height: 24),
+              Column(
                 children: [
-                  ElevatedButton.icon(
+                  _buildPostOptionButton(
+                    icon: Icons.photo_library,
+                    label: 'Choose from Gallery',
                     onPressed: () async {
                       final XFile? image = await _imagePicker.pickImage(
                         source: ImageSource.gallery,
                       );
                       if (image != null) {
-                        final currentUser = _authService.currentUser;
-                        if (currentUser != null && mounted) {
-                          try {
-                            await _memeService.postMeme(
-                              userId: currentUser.uid,
-                              userName: currentUser.displayName ?? 'Anonymous',
-                              imagePath: image.path,
-                              caption: captionController.text,
-                            );
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Meme posted successfully!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error posting meme: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        }
+                        await _handleImagePost(image, captionController.text);
                       }
                     },
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('Choose from Gallery'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pink,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
                   ),
-                  ElevatedButton.icon(
+                  const SizedBox(height: 12),
+                  _buildPostOptionButton(
+                    icon: Icons.camera_alt,
+                    label: 'Take Photo',
                     onPressed: () async {
                       final XFile? image = await _imagePicker.pickImage(
                         source: ImageSource.camera,
                       );
                       if (image != null) {
-                        final currentUser = _authService.currentUser;
-                        if (currentUser != null && mounted) {
-                          try {
-                            await _memeService.postMeme(
-                              userId: currentUser.uid,
-                              userName: currentUser.displayName ?? 'Anonymous',
-                              imagePath: image.path,
-                              caption: captionController.text,
-                            );
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Meme posted successfully!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error posting meme: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        }
+                        await _handleImagePost(image, captionController.text);
                       }
                     },
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Take Photo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pink,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildPostOptionButton(
+                    icon: Icons.create,
+                    label: 'Create Your Own Meme',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MemeCreatorScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -579,6 +522,64 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildPostOptionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.pink,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 16,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleImagePost(XFile image, String caption) async {
+    final currentUser = _authService.currentUser;
+    if (currentUser != null && mounted) {
+      try {
+        await _memeService.postMeme(
+          userId: currentUser.uid,
+          userName: currentUser.displayName ?? 'Anonymous',
+          imagePath: image.path,
+          caption: caption,
+        );
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Meme posted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error posting meme: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
