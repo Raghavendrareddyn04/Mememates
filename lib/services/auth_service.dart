@@ -10,12 +10,25 @@ class AuthService {
         '732413251106-jedg3hl2a5di93pr30iduulsav3pcake.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
   );
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore? _firestore;
+
+  // Initialize Firestore lazily
+  FirebaseFirestore get firestore {
+    _firestore ??= FirebaseFirestore.instance;
+    return _firestore!;
+  }
 
   // Check if user exists in database
   Future<bool> isNewUser(String userId) async {
-    final userDoc = await _firestore.collection('users').doc(userId).get();
-    return !userDoc.exists;
+    try {
+      final userDoc = await firestore.collection('users').doc(userId).get();
+      return !userDoc.exists;
+    } catch (e) {
+      // If Firestore is terminated, reinitialize it
+      _firestore = FirebaseFirestore.instance;
+      final userDoc = await _firestore!.collection('users').doc(userId).get();
+      return !userDoc.exists;
+    }
   }
 
   // Sign up with email and password
@@ -38,6 +51,9 @@ class AuthService {
   // Sign in with email and password
   Future<UserCredential> signIn(String email, String password) async {
     try {
+      // Ensure Firestore is initialized
+      _firestore = FirebaseFirestore.instance;
+
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -50,6 +66,14 @@ class AuthService {
 
       return userCredential;
     } catch (e) {
+      if (e is FirebaseException && e.code == 'failed-precondition') {
+        // If Firestore is terminated, reinitialize it and try again
+        _firestore = FirebaseFirestore.instance;
+        return await _auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      }
       rethrow;
     }
   }
@@ -57,6 +81,9 @@ class AuthService {
   // Sign in with Google
   Future<UserCredential> signInWithGoogle() async {
     try {
+      // Ensure Firestore is initialized
+      _firestore = FirebaseFirestore.instance;
+
       if (kIsWeb) {
         // Web implementation
         GoogleAuthProvider authProvider = GoogleAuthProvider();
@@ -96,12 +123,19 @@ class AuthService {
         } catch (_) {}
       }
 
-      // Clear any cached Firestore data
-      await _firestore.terminate();
-      await _firestore.clearPersistence();
+      // Clear any cached Firestore data safely
+      if (_firestore != null) {
+        try {
+          await _firestore!.terminate();
+          await _firestore!.clearPersistence();
+        } catch (_) {}
+      }
 
       // Finally, sign out from Firebase
       await _auth.signOut();
+
+      // Reset Firestore instance
+      _firestore = null;
     } catch (e) {
       rethrow;
     }

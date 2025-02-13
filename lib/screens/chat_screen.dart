@@ -32,6 +32,13 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isComposing = false;
   MemePost? _latestMeme;
 
+  String _getInitials(String? name) {
+    if (name == null || name.isEmpty) {
+      return '?';
+    }
+    return name[0].toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -612,7 +619,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 : null,
             child: widget.profile.profileImage == null
                 ? Text(
-                    widget.profile.name[0],
+                    _getInitials(widget.profile.name),
                     style: const TextStyle(fontSize: 32),
                   )
                 : null,

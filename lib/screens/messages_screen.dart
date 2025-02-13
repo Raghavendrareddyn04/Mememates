@@ -22,6 +22,13 @@ class _MessagesScreenState extends State<MessagesScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  String _getInitials(String? name) {
+    if (name == null || name.isEmpty) {
+      return '?';
+    }
+    return name[0].toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -272,7 +279,7 @@ class _MessagesScreenState extends State<MessagesScreen>
           onTap: () => _navigateToChat(chat),
           contentPadding: const EdgeInsets.all(12),
           leading: Hero(
-            tag: 'profile_${chat.otherUserId}',
+            tag: 'profile_messages_${chat.otherUserId}',
             child: Container(
               width: 56,
               height: 56,
@@ -298,7 +305,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                     : null,
                 child: chat.otherUserProfileImage == null
                     ? Text(
-                        chat.otherUserName[0].toUpperCase(),
+                        _getInitials(chat.otherUserName),
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -459,6 +466,13 @@ class ChatSearchDelegate extends SearchDelegate<String> {
 
   ChatSearchDelegate(this.chats);
 
+  String _getInitials(String? name) {
+    if (name == null || name.isEmpty) {
+      return '?';
+    }
+    return name[0].toUpperCase();
+  }
+
   @override
   ThemeData appBarTheme(BuildContext context) {
     final theme = Theme.of(context);
@@ -547,7 +561,7 @@ class ChatSearchDelegate extends SearchDelegate<String> {
                     ? NetworkImage(chat.otherUserProfileImage!)
                     : null,
                 child: chat.otherUserProfileImage == null
-                    ? Text(chat.otherUserName[0])
+                    ? Text(_getInitials(chat.otherUserName))
                     : null,
               ),
               title: Text(

@@ -95,13 +95,17 @@ class _VibeMatchScreenState extends State<VibeMatchScreen> {
                         ),
                         color: Colors.white.withOpacity(0.1),
                         child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: match.profileImage != null
-                                ? NetworkImage(match.profileImage!)
-                                : null,
-                            child: match.profileImage == null
-                                ? Text(match.name[0])
-                                : null,
+                          leading: Hero(
+                            tag:
+                                'profile_vibe_${match.userId}', // Use a unique tag
+                            child: CircleAvatar(
+                              backgroundImage: match.profileImage != null
+                                  ? NetworkImage(match.profileImage!)
+                                  : null,
+                              child: match.profileImage == null
+                                  ? Text(match.name[0])
+                                  : null,
+                            ),
                           ),
                           title: Text(
                             match.name,

@@ -9,6 +9,64 @@ class MemeService {
   final CloudinaryService _cloudinaryService = CloudinaryService();
   final ChatService _chatService = ChatService();
 
+  // Post a new meme and update streak
+  Future<void> postMeme({
+    required String userId,
+    required String userName,
+    required String imagePath,
+    required String caption,
+    String? songUrl,
+    String? songTitle,
+    String? artistName,
+  }) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userProfileImage = userDoc.data()?['profileImage'] as String?;
+      final lastPosted = userDoc.data()?['lastPosted'] as Timestamp?;
+      final currentStreak = userDoc.data()?['memeStreak'] ?? 0;
+
+      // Calculate streak
+      int newStreak = currentStreak;
+      if (lastPosted != null) {
+        final difference = DateTime.now().difference(lastPosted.toDate());
+        if (difference.inDays == 1) {
+          newStreak++;
+        } else if (difference.inDays > 1) {
+          newStreak = 1;
+        }
+      } else {
+        newStreak = 1;
+      }
+
+      // Upload meme image to Cloudinary
+      final memeUrl = await _cloudinaryService.uploadImage(imagePath);
+
+      // Create meme document
+      final memeRef = await _firestore.collection('memes').add({
+        'userId': userId,
+        'userName': userName,
+        'memeUrl': memeUrl,
+        'caption': caption,
+        'songUrl': songUrl,
+        'songTitle': songTitle,
+        'artistName': artistName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'likedByUsers': [],
+        'passedByUsers': [],
+        'userProfileImage': userProfileImage,
+      });
+
+      // Update user's streak and last posted time
+      await _firestore.collection('users').doc(userId).update({
+        'lastPosted': FieldValue.serverTimestamp(),
+        'memeStreak': newStreak,
+        'postedMemes': FieldValue.arrayUnion([memeRef.id])
+      });
+    } catch (e) {
+      throw 'Failed to post meme: $e';
+    }
+  }
+
   // Get meme feed for a user (excluding their own memes and liked/passed memes)
   Stream<List<MemePost>> getMemesFeed(
     String userId, {
@@ -85,67 +143,6 @@ class MemeService {
 
       return memes;
     });
-  }
-
-  // Post a new meme and update streak
-  Future<void> postMeme({
-    required String userId,
-    required String userName,
-    required String imagePath,
-    required String caption,
-    String? songUrl,
-    String? songTitle,
-    String? artistName,
-  }) async {
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      final userProfileImage = userDoc.data()?['profileImage'] as String?;
-      final lastPosted = userDoc.data()?['lastPosted'] as Timestamp?;
-      final currentStreak = userDoc.data()?['memeStreak'] ?? 0;
-
-      // Calculate streak
-      int newStreak = currentStreak;
-      if (lastPosted != null) {
-        final difference = DateTime.now().difference(lastPosted.toDate());
-        if (difference.inDays == 1) {
-          // Posted consecutive day - increase streak
-          newStreak++;
-        } else if (difference.inDays > 1) {
-          // Missed a day - reset streak
-          newStreak = 1;
-        }
-      } else {
-        // First post
-        newStreak = 1;
-      }
-
-      // Upload meme image
-      final memeUrl = await _cloudinaryService.uploadImage(imagePath);
-
-      // Create meme document
-      final memeRef = await _firestore.collection('memes').add({
-        'userId': userId,
-        'userName': userName,
-        'memeUrl': memeUrl,
-        'caption': caption,
-        'songUrl': songUrl,
-        'songTitle': songTitle,
-        'artistName': artistName,
-        'createdAt': FieldValue.serverTimestamp(),
-        'likedByUsers': [],
-        'passedByUsers': [],
-        'userProfileImage': userProfileImage,
-      });
-
-      // Update user's streak and last posted time
-      await _firestore.collection('users').doc(userId).update({
-        'lastPosted': FieldValue.serverTimestamp(),
-        'memeStreak': newStreak,
-        'postedMemes': FieldValue.arrayUnion([memeRef.id])
-      });
-    } catch (e) {
-      throw 'Failed to post meme: $e';
-    }
   }
 
   // Like meme and store in user's liked memes

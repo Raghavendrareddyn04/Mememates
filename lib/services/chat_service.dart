@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,17 +19,25 @@ class ChatService {
     if (_isInitialized) return;
 
     try {
-      // Use a fixed key and IV for consistency
-      final key = encrypt.Key.fromUtf8('mememates_secure_key_32_bytes_123!');
-      _iv = encrypt.IV.fromLength(16);
-      _encrypter = encrypt.Encrypter(encrypt.AES(key));
+      // Create a 256-bit (32 bytes) key using SHA-256
+      final keyString = 'mememates_secure_key_32_bytes_123!';
+      final keyBytes = sha256.convert(utf8.encode(keyString)).bytes;
+      final keyUint8List = Uint8List.fromList(keyBytes);
+      final key = encrypt.Key(keyUint8List);
+
+      // Create a fixed IV from the first 16 bytes of the key
+      _iv = encrypt.IV(Uint8List.fromList(keyBytes.sublist(0, 16)));
+
+      _encrypter =
+          encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
       _isInitialized = true;
     } catch (e) {
       print('Error initializing encryption: $e');
-      // Fallback to a simpler key if needed
-      final fallbackKey = encrypt.Key.fromLength(32);
-      _iv = encrypt.IV.fromLength(16);
-      _encrypter = encrypt.Encrypter(encrypt.AES(fallbackKey));
+      // Fallback to a proper 256-bit key if needed
+      final fallbackKey = encrypt.Key.fromSecureRandom(32);
+      _encrypter = encrypt.Encrypter(
+          encrypt.AES(fallbackKey, mode: encrypt.AESMode.cbc));
+      _iv = encrypt.IV.fromSecureRandom(16);
       _isInitialized = true;
     }
   }
@@ -37,10 +48,11 @@ class ChatService {
     }
 
     try {
-      return _encrypter.encrypt(message, iv: _iv).base64;
+      final encrypted = _encrypter.encrypt(message, iv: _iv);
+      return encrypted.base64;
     } catch (e) {
       print('Encryption error: $e');
-      return 'UNENCRYPTED:$message';
+      return 'PLAIN:$message'; // Return plaintext with marker as fallback
     }
   }
 
@@ -50,15 +62,15 @@ class ChatService {
     }
 
     try {
-      if (encryptedMessage.startsWith('UNENCRYPTED:')) {
-        return encryptedMessage.substring('UNENCRYPTED:'.length);
+      if (encryptedMessage.startsWith('PLAIN:')) {
+        return encryptedMessage.substring(6); // Remove 'PLAIN:' prefix
       }
 
       final encrypted = encrypt.Encrypted.fromBase64(encryptedMessage);
       return _encrypter.decrypt(encrypted, iv: _iv);
     } catch (e) {
       print('Decryption error: $e');
-      return 'Message could not be decrypted';
+      return 'Unable to decrypt message'; // Return error message as fallback
     }
   }
 
@@ -98,40 +110,55 @@ class ChatService {
           .orderBy('lastMessageTime', descending: true)
           .get();
 
+      if (chatsQuery.docs.isEmpty) {
+        return [];
+      }
+
       final List<ChatPreview> chats = [];
       for (var doc in chatsQuery.docs) {
         final data = doc.data();
-        final participants = List<String>.from(data['participants']);
-        final otherUserId = participants.firstWhere((id) => id != userId);
+        final participants =
+            List<String>.from(data['participants'] as List? ?? []);
+
+        if (participants.isEmpty) continue;
+
+        final otherUserId = participants.firstWhere(
+          (id) => id != userId,
+          orElse: () => '',
+        );
+
+        if (otherUserId.isEmpty) continue;
 
         final userDoc =
             await _firestore.collection('users').doc(otherUserId).get();
-        if (userDoc.exists) {
-          final userData = userDoc.data()!;
-          final lastMessage = data['lastMessage'] as String? ?? '';
+        if (!userDoc.exists) continue;
 
-          chats.add(
-            ChatPreview(
-              chatId: doc.id,
-              otherUserId: otherUserId,
-              otherUserName: userData['name'] ?? 'Unknown',
-              otherUserProfileImage: userData['profileImage'],
-              lastMessage:
-                  lastMessage.isNotEmpty ? _decryptMessage(lastMessage) : '',
-              lastMessageTime:
-                  (data['lastMessageTime'] as Timestamp?)?.toDate() ??
-                      DateTime.now(),
-              isRead:
-                  (data['readBy'] as List<dynamic>?)?.contains(userId) ?? true,
-              canMessage: data['canMessage'] ?? false,
-            ),
-          );
-        }
+        final userData = userDoc.data();
+        if (userData == null) continue;
+
+        final lastMessage = data['lastMessage'] as String? ?? '';
+        final lastMessageTime = data['lastMessageTime'] as Timestamp?;
+        final readBy = data['readBy'] as List?;
+
+        chats.add(
+          ChatPreview(
+            chatId: doc.id,
+            otherUserId: otherUserId,
+            otherUserName: userData['name'] as String? ?? 'Unknown',
+            otherUserProfileImage: userData['profileImage'] as String?,
+            lastMessage:
+                lastMessage.isEmpty ? '' : _decryptMessage(lastMessage),
+            lastMessageTime: lastMessageTime?.toDate() ?? DateTime.now(),
+            isRead: readBy?.contains(userId) ?? true,
+            canMessage: data['canMessage'] as bool? ?? false,
+          ),
+        );
       }
 
       return chats;
     } catch (e) {
-      throw 'Failed to load chats: $e';
+      print('Error loading chats: $e');
+      return [];
     }
   }
 
@@ -182,7 +209,9 @@ class ChatService {
   }) async {
     try {
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-      if (!(chatDoc.data()?['canMessage'] ?? false)) {
+      final chatData = chatDoc.data();
+
+      if (!(chatData?['canMessage'] as bool? ?? false)) {
         throw 'Messaging is not enabled for this chat';
       }
 
@@ -191,14 +220,12 @@ class ChatService {
       final batch = _firestore.batch();
       final chatRef = _firestore.collection('chats').doc(chatId);
 
-      // Update chat document
       batch.update(chatRef, {
         'lastMessage': encryptedContent,
         'lastMessageTime': FieldValue.serverTimestamp(),
         'readBy': [senderId],
       });
 
-      // Add message document
       final messageRef = chatRef.collection('messages').doc();
       batch.set(messageRef, {
         'senderId': senderId,
@@ -222,18 +249,25 @@ class ChatService {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        return [];
+      }
+
       return snapshot.docs.map((doc) {
         final data = doc.data();
-        final encryptedContent = data['content'] as String;
-        final decryptedContent = _decryptMessage(encryptedContent);
+        final encryptedContent = data['content'] as String? ?? '';
+        final timestamp = data['timestamp'] as Timestamp?;
+        final expiresAt = data['expiresAt'] as Timestamp?;
+        final readBy = data['readBy'] as List?;
 
         return ChatMessage(
           id: doc.id,
-          senderId: data['senderId'],
-          content: decryptedContent,
-          timestamp: (data['timestamp'] as Timestamp).toDate(),
-          readBy: List<String>.from(data['readBy'] ?? []),
-          expiresAt: (data['expiresAt'] as Timestamp).toDate(),
+          senderId: data['senderId'] as String? ?? '',
+          content:
+              encryptedContent.isEmpty ? '' : _decryptMessage(encryptedContent),
+          timestamp: timestamp?.toDate() ?? DateTime.now(),
+          readBy: List<String>.from(readBy ?? []),
+          expiresAt: expiresAt?.toDate() ?? DateTime.now(),
         );
       }).toList();
     });
@@ -247,19 +281,16 @@ class ChatService {
       final batch = _firestore.batch();
       final chatRef = _firestore.collection('chats').doc(chatId);
 
-      // Update chat document
       batch.update(chatRef, {
         'readBy': FieldValue.arrayUnion([userId]),
         'lastViewed.$userId': FieldValue.serverTimestamp(),
       });
 
-      // Get all unread messages
       final unreadMessages = await chatRef
           .collection('messages')
           .where('readBy', arrayContains: userId, isEqualTo: false)
           .get();
 
-      // Mark each message as read
       for (var doc in unreadMessages.docs) {
         batch.update(doc.reference, {
           'readBy': FieldValue.arrayUnion([userId]),
@@ -268,21 +299,22 @@ class ChatService {
 
       await batch.commit();
 
-      // Check if both users have read all messages
       final chatDoc = await chatRef.get();
-      final participants =
-          List<String>.from(chatDoc.data()?['participants'] ?? []);
-      final lastViewed =
-          Map<String, Timestamp>.from(chatDoc.data()?['lastViewed'] ?? {});
+      final chatData = chatDoc.data();
+      if (chatData == null) return;
 
-      if (participants
-          .every((participant) => lastViewed.containsKey(participant))) {
-        // Both users have viewed the messages, set expiration
+      final participants =
+          List<String>.from(chatData['participants'] as List? ?? []);
+      final lastViewed = chatData['lastViewed'] as Map?;
+
+      if (participants.isNotEmpty &&
+          lastViewed != null &&
+          participants
+              .every((participant) => lastViewed.containsKey(participant))) {
         await chatRef.update({
           'expiresAt': DateTime.now().add(const Duration(days: 1)),
         });
 
-        // Schedule cleanup
         await cleanupExpiredMessages();
       }
     } catch (e) {
@@ -301,20 +333,18 @@ class ChatService {
       for (var chatDoc in expiredChatsQuery.docs) {
         final batch = _firestore.batch();
 
-        // Delete all messages in the chat
         final messagesQuery =
             await chatDoc.reference.collection('messages').get();
         for (var messageDoc in messagesQuery.docs) {
           batch.delete(messageDoc.reference);
         }
 
-        // Update chat document
         batch.update(chatDoc.reference, {
           'lastMessage': '',
           'lastMessageTime': null,
           'readBy': [],
           'expiresAt': null,
-          'active': false, // Mark chat as inactive
+          'active': false,
         });
 
         await batch.commit();
