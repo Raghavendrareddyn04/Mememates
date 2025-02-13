@@ -4,6 +4,7 @@ import '../services/meme_service.dart';
 import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
+import 'mood_board_editor_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -122,6 +123,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(
         builder: (context) => const SettingsScreen(),
       ),
+    );
+  }
+
+  Widget _buildMoodBoardSection(bool isSmallScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Mood Board',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 24 : 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MoodBoardEditorScreen(
+                      initialImages: List<String>.from(
+                          _userProfile?['moodBoardImages'] ?? []),
+                      onSave: (updatedImages) async {
+                        try {
+                          final currentUser = _userService.currentUser;
+                          if (currentUser != null) {
+                            await _userService.updateUserProfile(
+                              userId: currentUser.uid,
+                              moodBoardImages: updatedImages,
+                              interests: List<String>.from(
+                                  _userProfile?['interests'] ?? []),
+                            );
+                            await _loadUserProfile();
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content:
+                                      Text('Error updating mood board: $e')),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: isSmallScreen ? 3 : 4,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: (_userProfile?['moodBoardImages'] as List?)?.length ?? 0,
+          itemBuilder: (context, index) {
+            final images =
+                List<String>.from(_userProfile?['moodBoardImages'] ?? []);
+            return Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                image: DecorationImage(
+                  image: NetworkImage(images[index]),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -484,34 +566,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      _buildSection(
-                        title: 'Mood Board',
-                        content: GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: isSmallScreen ? 3 : 4,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
-                          itemCount: (_userProfile?['moodBoardImages'] as List?)
-                                  ?.length ??
-                              0,
-                          itemBuilder: (context, index) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(15),
-                                image: DecorationImage(
-                                  image: NetworkImage(
-                                      _userProfile!['moodBoardImages'][index]),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                      _buildMoodBoardSection(isSmallScreen),
                       const SizedBox(height: 24),
                       _buildSection(
                         title: _showPostedMemes ? 'Your Memes' : 'Liked Memes',
