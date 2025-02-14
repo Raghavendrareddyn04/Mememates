@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_auth/models/user_profile.dart';
 import 'package:flutter_auth/screens/meme_detail_screen.dart';
 import 'package:flutter_auth/screens/profile_screen.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/meme_post.dart';
 import '../services/meme_service.dart';
@@ -187,7 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!snapshot.hasData) {
                   return const SliverFillRemaining(
                     child: Center(
-                      child: CircularProgressIndicator(),
+                      child: LoadingAnimation(
+                          message: "Finding your perfect meme match..."),
                     ),
                   );
                 }
@@ -267,16 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             onLike: () async {
                               await _memeService.likeMeme(
                                   meme.id, currentUser.uid);
-                              setState(() {
-                                memes.removeAt(index);
-                              });
                             },
                             onPass: () async {
                               await _memeService.passMeme(
                                   meme.id, currentUser.uid);
-                              setState(() {
-                                memes.removeAt(index);
-                              });
                             },
                             onChat: canChat
                                 ? () => _navigateToChat(context, meme)
@@ -526,7 +522,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
                       height: 200,
-                      child: Center(child: CircularProgressIndicator()),
+                      child: LoadingAnimation(
+                          message: "Finding your perfect meme match..."),
                     );
                   }
                   if (snapshot.hasError) {
@@ -652,8 +649,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+          body: Center(
+        child: LoadingAnimation(message: "Finding your perfect meme match..."),
+      ));
     }
 
     return Scaffold(
@@ -842,7 +840,6 @@ class _MemeCard extends StatefulWidget {
   final bool isWideScreen;
 
   const _MemeCard({
-    super.key,
     required this.meme,
     required this.currentUserId,
     required this.onLike,
@@ -862,6 +859,7 @@ class _MemeCardState extends State<_MemeCard>
   bool _isLiked = false;
   bool _isPassed = false;
   bool _isProcessing = false;
+  bool _isDismissed = false;
 
   @override
   void initState() {
@@ -870,7 +868,7 @@ class _MemeCardState extends State<_MemeCard>
     _isPassed = widget.meme.isPassedBy(widget.currentUserId);
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
 
@@ -884,20 +882,17 @@ class _MemeCardState extends State<_MemeCard>
 
     _animationController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        if (mounted) {
-          setState(() {});
-        }
+        setState(() => _isDismissed = true);
       }
     });
   }
 
   Future<void> _handleLike() async {
-    if (_isProcessing) return;
+    if (_isProcessing || _isDismissed) return;
     setState(() => _isProcessing = true);
 
     try {
-      _animationController.forward();
-      await Future.delayed(const Duration(milliseconds: 50));
+      await _animationController.forward();
       widget.onLike();
     } catch (e) {
       _animationController.reverse();
@@ -914,12 +909,11 @@ class _MemeCardState extends State<_MemeCard>
   }
 
   Future<void> _handlePass() async {
-    if (_isProcessing) return;
+    if (_isProcessing || _isDismissed) return;
     setState(() => _isProcessing = true);
 
     try {
-      _animationController.forward();
-      await Future.delayed(const Duration(milliseconds: 50));
+      await _animationController.forward();
       widget.onPass();
     } catch (e) {
       _animationController.reverse();
@@ -937,6 +931,10 @@ class _MemeCardState extends State<_MemeCard>
 
   @override
   Widget build(BuildContext context) {
+    if (_isDismissed) {
+      return const SizedBox.shrink();
+    }
+
     return ScaleTransition(
         scale: _scaleAnimation,
         child: Dismissible(
@@ -1163,7 +1161,8 @@ class _MemeCardState extends State<_MemeCard>
               ? const SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingAnimation(
+                      message: "Finding your perfect meme match..."),
                 )
               : Icon(icon, size: 28, color: color),
           onPressed: onPressed,

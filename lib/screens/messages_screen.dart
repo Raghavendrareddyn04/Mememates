@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../models/user_profile.dart';
 import '../services/user_service.dart';
 import '../services/chat_service.dart';
@@ -160,7 +161,9 @@ class _MessagesScreenState extends State<MessagesScreen>
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(
+                      child: LoadingAnimation(
+                          message: "Finding your perfect meme match..."))
                   : _chats.isEmpty
                       ? _buildEmptyState()
                       : FadeTransition(

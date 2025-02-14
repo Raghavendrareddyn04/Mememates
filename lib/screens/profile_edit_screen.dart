@@ -38,6 +38,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
   String? _songTitle;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Non-binary', 'Other'];
+  final List<String> _preferredGenderOptions = [
+    'Male',
+    'Female',
+    'Non-binary',
+    'Other',
+    'All'
+  ];
   final List<String> _interestOptions = [
     'Memes',
     'Gaming',
@@ -84,7 +91,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
       _profileImageUrl = widget.initialProfile!['profileImage'];
       _age = widget.initialProfile!['age'];
       _gender = widget.initialProfile!['gender'];
-      _preferredGender = widget.initialProfile!['preferredGender'];
+
+      // Convert 'Both' to 'All' for backward compatibility
+      final preferredGender = widget.initialProfile!['preferredGender'];
+      _preferredGender = preferredGender == 'Both' ? 'All' : preferredGender;
+
       _interests = List<String>.from(widget.initialProfile!['interests'] ?? []);
       _artistName = widget.initialProfile!['artistName'];
       _songTitle = widget.initialProfile!['songTitle'];
@@ -107,28 +118,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error picking image: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _addMoodBoardImage() async {
-    try {
-      final XFile? image =
-          await _imagePicker.pickImage(source: ImageSource.gallery);
-      if (image != null) {
-        setState(() => _isLoading = true);
-        final url = await _cloudinaryService.uploadImage(image.path);
-        setState(() {
-          _moodBoardImages.add(url);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding image: $e')),
         );
       }
     }
@@ -184,16 +173,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Profile'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.deepPurple.shade900,
-                Colors.purple.shade900,
-              ],
-            ),
-          ),
-        ),
         actions: [
           TextButton.icon(
             onPressed: _isLoading ? null : _saveProfile,
@@ -249,14 +228,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
                                 _buildSectionTitle('Interests'),
                                 const SizedBox(height: 16),
                                 _buildInterestsSection(),
-                                const SizedBox(height: 32),
-                                _buildSectionTitle('Mood Board'),
-                                const SizedBox(height: 16),
-                                _buildMoodBoardSection(isSmallScreen),
-                                const SizedBox(height: 32),
-                                _buildSectionTitle('Music'),
-                                const SizedBox(height: 16),
-                                _buildMusicSection(isSmallScreen),
                               ],
                             ),
                           ),
@@ -347,6 +318,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
 
   Widget _buildBasicInfoFields(bool isSmallScreen) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextFormField(
           controller: _nameController,
@@ -392,6 +364,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
                   );
                 }).toList(),
                 onChanged: (value) => setState(() => _gender = value),
+                validator: (value) =>
+                    value == null ? 'Gender is required' : null,
               ),
             ),
           ],
@@ -402,7 +376,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
           style: const TextStyle(color: Colors.white),
           dropdownColor: Colors.deepPurple,
           decoration: _buildInputDecoration('Interested In', Icons.favorite),
-          items: [..._genderOptions, 'All'].map((gender) {
+          items: _preferredGenderOptions.map((gender) {
             return DropdownMenuItem(
               value: gender,
               child: Text(gender),
@@ -455,133 +429,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
           );
         }).toList(),
       ),
-    );
-  }
-
-  Widget _buildMoodBoardSection(bool isSmallScreen) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isSmallScreen ? 3 : 4,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: _moodBoardImages.length + 1,
-      itemBuilder: (context, index) {
-        if (index == _moodBoardImages.length) {
-          return _buildAddImageButton();
-        }
-        return _buildMoodBoardImage(index);
-      },
-    );
-  }
-
-  Widget _buildAddImageButton() {
-    return GestureDetector(
-      onTap: _addMoodBoardImage,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.3),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.add_photo_alternate,
-              color: Colors.white.withOpacity(0.7),
-              size: 32,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add Image',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMoodBoardImage(int index) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            image: DecorationImage(
-              image: NetworkImage(_moodBoardImages[index]),
-              fit: BoxFit.cover,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 8,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _moodBoardImages.removeAt(index);
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1),
-              ),
-              child: const Icon(
-                Icons.close,
-                color: Colors.white,
-                size: 16,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMusicSection(bool isSmallScreen) {
-    return Column(
-      children: [
-        TextFormField(
-          initialValue: _selectedSong,
-          style: const TextStyle(color: Colors.white),
-          decoration: _buildInputDecoration('Anthem', Icons.music_note),
-          onChanged: (value) => setState(() => _selectedSong = value),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          initialValue: _artistName,
-          style: const TextStyle(color: Colors.white),
-          decoration: _buildInputDecoration('Artist Name', Icons.person),
-          onChanged: (value) => setState(() => _artistName = value),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          initialValue: _songTitle,
-          style: const TextStyle(color: Colors.white),
-          decoration: _buildInputDecoration('Song Title', Icons.audiotrack),
-          onChanged: (value) => setState(() => _songTitle = value),
-        ),
-      ],
     );
   }
 

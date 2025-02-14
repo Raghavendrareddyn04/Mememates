@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/user_service.dart';
 import '../services/meme_service.dart';
 import '../models/meme_post.dart';
@@ -339,7 +340,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+            child: LoadingAnimation(
+                message: "Finding your perfect meme match...")),
       );
     }
 
@@ -570,7 +573,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 builder: (context, snapshot) {
                                   if (!snapshot.hasData) {
                                     return const Center(
-                                        child: CircularProgressIndicator());
+                                        child: const LoadingAnimation(
+                                            message:
+                                                "Finding your perfect meme match..."));
                                   }
                                   return GridView.builder(
                                     shrinkWrap: true,

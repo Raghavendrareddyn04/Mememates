@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/auth_service.dart';
 
 class DiscoveryScreen extends StatefulWidget {
@@ -276,7 +277,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+          child: const LoadingAnimation(
+              message: "Finding your perfect meme match..."));
     }
 
     return RefreshIndicator(
