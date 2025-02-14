@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_auth/models/user_profile.dart';
 import 'package:flutter_auth/screens/meme_detail_screen.dart';
@@ -14,6 +16,7 @@ import 'premium_screen.dart';
 import 'messages_screen.dart';
 import 'vibe_match_screen.dart';
 import 'meme_creator_screen.dart';
+import 'discovery_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,14 +32,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   Map<String, dynamic>? _streakInfo;
   bool _isLoading = false;
-  int _currentIndex = 1;
+  int _currentIndex = 0;
 
   // Feed Preferences
   RangeValues _ageRange = const RangeValues(18, 35);
   String? _preferredGender;
   bool _showPreferences = false;
-
-  // Animation duration
 
   @override
   void initState() {
@@ -83,6 +84,8 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return _buildHomeContent();
       case 2:
+        return const DiscoveryScreen();
+      case 3:
         return const ProfileScreen();
       default:
         return const MessagesScreen();
@@ -463,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         source: ImageSource.gallery,
                       );
                       if (image != null) {
-                        await _handleImagePost(image, captionController.text);
+                        _showPostConfirmation(image, captionController.text);
                       }
                     },
                   ),
@@ -476,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         source: ImageSource.camera,
                       );
                       if (image != null) {
-                        await _handleImagePost(image, captionController.text);
+                        _showPostConfirmation(image, captionController.text);
                       }
                     },
                   ),
@@ -499,6 +502,91 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showPostConfirmation(XFile image, String caption) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.deepPurple.shade900,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Post Meme?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FutureBuilder<Uint8List>(
+                future: image.readAsBytes(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return const SizedBox(
+                      height: 200,
+                      child: Center(child: Text('Error loading image')),
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const SizedBox(
+                      height: 200,
+                      child: Center(child: Text('No image data')),
+                    );
+                  }
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.3,
+                      maxWidth: MediaQuery.of(context).size.width * 0.8,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        snapshot.data!,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (caption.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  caption,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+              _handleImagePost(image, caption);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.pink,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Post'),
+          ),
+        ],
       ),
     );
   }
@@ -540,7 +628,6 @@ class _HomeScreenState extends State<HomeScreen> {
           caption: caption,
         );
         if (mounted) {
-          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Meme posted successfully!'),
@@ -665,6 +752,7 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.transparent,
           selectedItemColor: Colors.white,
           unselectedItemColor: Colors.white.withOpacity(0.6),
+          type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.chat),
@@ -673,6 +761,10 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.home),
               label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.explore),
+              label: 'Discover',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person),
