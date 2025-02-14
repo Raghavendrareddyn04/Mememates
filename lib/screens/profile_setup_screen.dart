@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
+import 'mood_board_editor_screen.dart';
+import '../widgets/spotify_track_picker.dart';
+import '../services/spotify_service.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -13,7 +15,7 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -39,9 +41,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   final List<String> _moodBoardImages = [];
 
   // Music
-  String? _selectedSong;
-  String? _artistName;
-  String? _songTitle;
+  SpotifyTrack? _selectedTrack;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Non-binary', 'Other'];
   final List<String> _interestOptions = [
@@ -105,31 +105,76 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     }
   }
 
-  Future<void> _addMoodBoardImage() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
+  void _openMoodBoardEditor() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MoodBoardEditorScreen(
+          initialImages: _moodBoardImages,
+          onSave: (images) {
+            setState(() {
+              _moodBoardImages.clear();
+              _moodBoardImages.addAll(images);
+            });
+          },
+        ),
+      ),
+    );
+  }
 
-      if (image != null) {
-        setState(() => _isLoading = true);
-        final url = await _cloudinaryService.uploadImage(image.path);
-        setState(() {
-          _moodBoardImages.add(url);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding image: $e')),
-      );
-    }
+  void _showSpotifyTrackPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade900,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'Select Your Anthem',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SpotifyTrackPicker(
+                onTrackSelected: (track) {
+                  setState(() => _selectedTrack = track);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _nextStep() {
+    if (_currentStep == 0) {
+      // Validate basic info before proceeding
+      if (!_formKey.currentState!.validate() ||
+          _gender == null ||
+          _age == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill in all required fields'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     if (_currentStep < 2) {
       setState(() => _currentStep++);
       _pageController.nextPage(
@@ -153,7 +198,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-    _formKey.currentState!.save();
+
+    // Additional validation for required fields
+    if (_nameController.text.isEmpty || _age == null || _gender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name, age, and gender are required'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -166,13 +221,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       await _userService.createUserProfile(
         userId: currentUser.uid,
         name: _nameController.text,
-        age: _age ?? 18,
-        gender: _gender ?? 'Other',
+        age: _age!,
+        gender: _gender!,
         preferredGender: _preferredGender ?? 'Both',
         moodBoardImages: _moodBoardImages,
-        anthem: _selectedSong,
-        artistName: _artistName,
-        songTitle: _songTitle,
+        anthem: _selectedTrack?.uri,
+        artistName: _selectedTrack?.artist,
+        songTitle: _selectedTrack?.name,
         profileImage: _profileImageUrl,
       );
 
@@ -320,6 +375,172 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
+  Widget _buildMoodBoardStep(bool isSmallScreen, bool isLargeScreen) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Create Your Mood Board',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 24 : 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Add images that represent your vibe',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: isSmallScreen ? 16 : 18,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: _openMoodBoardEditor,
+                icon: const Icon(Icons.edit),
+                label: const Text('Open Mood Board Editor'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.pink,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_moodBoardImages.isNotEmpty)
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isLargeScreen ? 4 : (isSmallScreen ? 2 : 3),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: _moodBoardImages.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: NetworkImage(_moodBoardImages[index]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMusicStep(bool isSmallScreen, bool isLargeScreen) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Choose Your Anthem',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 24 : 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Select a song that represents you',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: isSmallScreen ? 16 : 18,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: _showSpotifyTrackPicker,
+                icon: const Icon(Icons.music_note),
+                label: const Text('Choose a Song'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.pink,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                ),
+              ),
+            ),
+            if (_selectedTrack != null) ...[
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        _selectedTrack!.albumArt,
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedTrack!.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            _selectedTrack!.artist,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () {
+                        setState(() => _selectedTrack = null);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileImageSection(bool isSmallScreen) {
     return Center(
       child: Stack(
@@ -399,7 +620,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         const SizedBox(height: 24),
         _buildTextField(
           controller: _nameController,
-          label: 'Name',
+          label: 'Name *',
           icon: Icons.person,
           validator: (value) =>
               value?.isEmpty ?? true ? 'Name is required' : null,
@@ -409,12 +630,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
           children: [
             Expanded(
               child: _buildTextField(
-                label: 'Age',
+                label: 'Age *',
                 icon: Icons.cake,
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Required';
+                    return 'Age is required';
                   }
                   final age = int.tryParse(value);
                   if (age == null || age < 18) {
@@ -422,16 +643,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                   }
                   return null;
                 },
-                onChanged: (value) => _age = int.tryParse(value),
+                onChanged: (value) =>
+                    setState(() => _age = int.tryParse(value)),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: _buildDropdownField(
                 value: _gender,
-                label: 'Gender',
+                label: 'Gender *',
                 icon: Icons.people,
                 items: _genderOptions,
+                validator: (value) =>
+                    value == null ? 'Gender is required' : null,
                 onChanged: (value) => setState(() => _gender = value),
               ),
             ),
@@ -504,290 +728,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
-  Widget _buildMoodBoardStep(bool isSmallScreen, bool isLargeScreen) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Create Your Mood Board',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isSmallScreen ? 24 : 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Add images that represent your vibe',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: isSmallScreen ? 16 : 18,
-              ),
-            ),
-            const SizedBox(height: 32),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: isLargeScreen ? 4 : (isSmallScreen ? 2 : 3),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1,
-              ),
-              itemCount: _moodBoardImages.length + 1,
-              itemBuilder: (context, index) {
-                if (index == _moodBoardImages.length) {
-                  return _buildAddImageButton(isSmallScreen);
-                }
-                return _buildMoodBoardImage(index, isSmallScreen);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddImageButton(bool isSmallScreen) {
-    return GestureDetector(
-      onTap: _addMoodBoardImage,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.3),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.add_photo_alternate,
-              color: Colors.white.withOpacity(0.7),
-              size: isSmallScreen ? 32 : 48,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add Image',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: isSmallScreen ? 12 : 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMoodBoardImage(int index, bool isSmallScreen) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            image: DecorationImage(
-              image: NetworkImage(_moodBoardImages[index]),
-              fit: BoxFit.cover,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 8,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _moodBoardImages.removeAt(index);
-              });
-            },
-            child: Container(
-              padding: EdgeInsets.all(isSmallScreen ? 4 : 6),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1),
-              ),
-              child: Icon(
-                Icons.close,
-                color: Colors.white,
-                size: isSmallScreen ? 16 : 20,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMusicStep(bool isSmallScreen, bool isLargeScreen) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your Music Anthem',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isSmallScreen ? 24 : 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Choose a song that represents you',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: isSmallScreen ? 16 : 18,
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (isLargeScreen)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildMusicFields(isSmallScreen),
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: _buildMusicPreview(isSmallScreen),
-                  ),
-                ],
-              )
-            else ...[
-              _buildMusicFields(isSmallScreen),
-              const SizedBox(height: 32),
-              _buildMusicPreview(isSmallScreen),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMusicFields(bool isSmallScreen) {
-    return Column(
-      children: [
-        _buildTextField(
-          initialValue: _selectedSong,
-          label: 'Song Title',
-          icon: Icons.music_note,
-          onChanged: (value) => setState(() => _selectedSong = value),
-        ),
-        const SizedBox(height: 16),
-        _buildTextField(
-          initialValue: _artistName,
-          label: 'Artist Name',
-          icon: Icons.person,
-          onChanged: (value) {
-            setState(() {
-              _artistName = value;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-        _buildTextField(
-          initialValue: _songTitle,
-          label: 'Album',
-          icon: Icons.album,
-          onChanged: (value) => setState(() => _songTitle = value),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMusicPreview(bool isSmallScreen) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Preview',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isSmallScreen ? 20 : 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (_selectedSong != null || _artistName != null)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                width: isSmallScreen ? 48 : 60,
-                height: isSmallScreen ? 48 : 60,
-                decoration: BoxDecoration(
-                  color: Colors.pink.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.music_note,
-                  color: Colors.pink,
-                  size: isSmallScreen ? 24 : 30,
-                ),
-              ),
-              title: Text(
-                _selectedSong ?? 'No song selected',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text(
-                _artistName ?? 'Unknown Artist',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                ),
-              ),
-              trailing: Icon(
-                Icons.play_circle_filled,
-                color: Colors.pink,
-                size: isSmallScreen ? 40 : 48,
-              ),
-            )
-          else
-            Center(
-              child: Text(
-                'Add your anthem details above',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: isSmallScreen ? 14 : 16,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTextField({
     TextEditingController? controller,
-    String? initialValue,
     required String label,
     required IconData icon,
     TextInputType? keyboardType,
@@ -796,7 +738,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   }) {
     return TextFormField(
       controller: controller,
-      initialValue: controller == null ? initialValue : null,
       style: const TextStyle(color: Colors.white),
       keyboardType: keyboardType,
       decoration: InputDecoration(
@@ -829,6 +770,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     required IconData icon,
     required List<String> items,
     required void Function(String?)? onChanged,
+    String? Function(String?)? validator,
   }) {
     return DropdownButtonFormField<String>(
       value: value,
@@ -859,6 +801,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
           child: Text(item),
         );
       }).toList(),
+      validator: validator,
       onChanged: onChanged,
     );
   }

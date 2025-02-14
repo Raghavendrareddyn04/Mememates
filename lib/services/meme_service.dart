@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_auth/models/user_profile.dart';
+import 'package:flutter_auth/services/notification_service.dart';
 import '../models/meme_post.dart';
 import 'cloudinary_service.dart';
 import 'chat_service.dart';
@@ -8,6 +9,7 @@ class MemeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CloudinaryService _cloudinaryService = CloudinaryService();
   final ChatService _chatService = ChatService();
+  final NotificationService _notificationService = NotificationService();
 
   // Post a new meme and update streak
   Future<void> postMeme({
@@ -387,15 +389,36 @@ class MemeService {
 
       if (memeData != null) {
         final memeOwnerId = memeData['userId'] as String;
+        final currentUserDoc =
+            await _firestore.collection('users').doc(userId).get();
+        final currentUserName = currentUserDoc.data()?['name'] ?? 'Someone';
 
         // Create chat entry
         await _chatService.createChatOnMemeLike(memeId, userId, memeOwnerId);
+
+        // Send notification for meme like
+        await _notificationService.handleMemeInteraction(
+          memeOwnerId: memeOwnerId,
+          interactorName: currentUserName,
+          isLike: true,
+        );
 
         // Check for mutual like
         final hasOtherUserLikedMyMeme =
             await hasUserLikedMyMeme(userId, memeOwnerId);
         if (hasOtherUserLikedMyMeme) {
+          // Enable messaging
           await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
+
+          // Send vibe match notification
+          final ownerDoc =
+              await _firestore.collection('users').doc(memeOwnerId).get();
+          final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
+
+          // Notify both users about the match
+          await _notificationService.handleVibeMatch(
+              memeOwnerId, currentUserName);
+          await _notificationService.handleVibeMatch(userId, ownerName);
         }
       }
     } catch (e) {
@@ -412,5 +435,26 @@ class MemeService {
         .get();
 
     return querySnapshot.docs.isNotEmpty;
+  }
+
+  // Add method for handling mood board interactions
+  Future<void> handleMoodBoardInteraction({
+    required String boardOwnerId,
+    required String interactorId,
+    required bool isLike,
+  }) async {
+    try {
+      final interactorDoc =
+          await _firestore.collection('users').doc(interactorId).get();
+      final interactorName = interactorDoc.data()?['name'] ?? 'Someone';
+
+      await _notificationService.handleMoodBoardInteraction(
+        boardOwnerId: boardOwnerId,
+        interactorName: interactorName,
+        isLike: isLike,
+      );
+    } catch (e) {
+      print('Error handling mood board interaction: $e');
+    }
   }
 }

@@ -31,8 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final UserService _userService = UserService();
   final ImagePicker _imagePicker = ImagePicker();
   Map<String, dynamic>? _streakInfo;
-  bool _isLoading = false;
-  int _currentIndex = 0;
+  final bool _isLoading = false;
+  int _currentIndex = 1;
 
   // Feed Preferences
   RangeValues _ageRange = const RangeValues(18, 35);
@@ -657,70 +657,119 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Text(
-              'MemeMates',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            IconButton(
-              icon: Icon(
-                _showPreferences ? Icons.expand_less : Icons.tune,
-                color: const Color.fromARGB(241, 242, 245, 245),
+      appBar: _currentIndex == 1
+          ? AppBar(
+              automaticallyImplyLeading: false,
+              title: Row(
+                children: [
+                  const Text(
+                    'MemeMates',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  if (_currentIndex == 1)
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tune,
+                              color: _showPreferences
+                                  ? Colors.pink
+                                  : const Color.fromARGB(241, 242, 245, 245),
+                              size: 20,
+                            ),
+                            if (_showPreferences) const SizedBox(width: 4),
+                            if (_showPreferences)
+                              const Icon(
+                                Icons.expand_less,
+                                color: Color.fromARGB(241, 242, 245, 245),
+                                size: 20,
+                              ),
+                          ],
+                        ),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showPreferences = !_showPreferences;
+                        });
+                      },
+                    ),
+                ],
               ),
-              onPressed: () {
-                setState(() {
-                  _showPreferences = !_showPreferences;
-                });
-              },
-            ),
-          ],
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.pink.shade900,
-                Colors.deepPurple.shade900,
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const VibeMatchScreen(),
+              flexibleSpace: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.pink.shade900,
+                      Colors.purple.shade900,
+                    ],
+                  ),
                 ),
-              );
-            },
-          ),
-          IconButton(
-            icon: NotificationBadge(
-              child: const Icon(Icons.notifications),
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const NotificationsScreen(),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.favorite),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const VibeMatchScreen(),
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: NotificationBadge(
+                    child: const Icon(Icons.notifications),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsScreen(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.diamond),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const PremiumScreen()),
+                  ),
+                ),
+              ],
+            )
+          : AppBar(
+              automaticallyImplyLeading: false,
+              title: Text(
+                _currentIndex == 0
+                    ? 'Messages'
+                    : _currentIndex == 2
+                        ? 'Discover'
+                        : 'Profile',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              flexibleSpace: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.pink.shade900,
+                      Colors.purple.shade900,
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.diamond),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PremiumScreen()),
-            ),
-          ),
-        ],
-      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -821,7 +870,7 @@ class _MemeCardState extends State<_MemeCard>
     _isPassed = widget.meme.isPassedBy(widget.currentUserId);
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 150),
       vsync: this,
     );
 
@@ -830,14 +879,16 @@ class _MemeCardState extends State<_MemeCard>
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutQuart,
     ));
-  }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
+    _animationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    });
   }
 
   Future<void> _handleLike() async {
@@ -845,7 +896,8 @@ class _MemeCardState extends State<_MemeCard>
     setState(() => _isProcessing = true);
 
     try {
-      await _animationController.forward();
+      _animationController.forward();
+      await Future.delayed(const Duration(milliseconds: 50));
       widget.onLike();
     } catch (e) {
       _animationController.reverse();
@@ -866,7 +918,8 @@ class _MemeCardState extends State<_MemeCard>
     setState(() => _isProcessing = true);
 
     try {
-      await _animationController.forward();
+      _animationController.forward();
+      await Future.delayed(const Duration(milliseconds: 50));
       widget.onPass();
     } catch (e) {
       _animationController.reverse();
