@@ -17,7 +17,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   final _userService = UserService();
   final _memeService = MemeService();
   bool _isLoading = true;
@@ -28,14 +29,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _likedMemesCount = 0;
   bool _showPostedMemes = true;
   SpotifyTrack? _selectedTrack;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
     _loadUserProfile();
     _loadMemeCounts();
     _loadStreakInfo();
     _loadLikedMemes();
+  }
+
+  void _initializeAnimations() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    _animationController.forward();
   }
 
   Future<void> _loadUserProfile() async {
@@ -179,175 +215,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMoodBoardSection(bool isSmallScreen) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Mood Board',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isSmallScreen ? 24 : 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MoodBoardEditorScreen(
-                      initialImages: List<String>.from(
-                          _userProfile?['moodBoardImages'] ?? []),
-                      onSave: (updatedImages) async {
-                        try {
-                          final currentUser = _userService.currentUser;
-                          if (currentUser != null) {
-                            await _userService.updateUserProfile(
-                              userId: currentUser.uid,
-                              moodBoardImages: updatedImages,
-                              interests: List<String>.from(
-                                  _userProfile?['interests'] ?? []),
-                            );
-                            await _loadUserProfile();
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content:
-                                      Text('Error updating mood board: $e')),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: isSmallScreen ? 3 : 4,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: (_userProfile?['moodBoardImages'] as List?)?.length ?? 0,
-          itemBuilder: (context, index) {
-            final images =
-                List<String>.from(_userProfile?['moodBoardImages'] ?? []);
-            return Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                image: DecorationImage(
-                  image: NetworkImage(images[index]),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMusicSection() {
-    final hasAnthem = _userProfile?['anthem'] != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Music',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _showSpotifyTrackPicker,
-              icon: const Icon(Icons.edit, color: Colors.pink),
-              label: Text(
-                hasAnthem ? 'Change Song' : 'Add Song',
-                style: const TextStyle(color: Colors.pink),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (hasAnthem)
-          SpotifyPlayer(
-            trackUri: _userProfile!['anthem'],
-            trackName: _userProfile!['songTitle'] ?? '',
-            artistName: _userProfile!['artistName'] ?? '',
-            albumArt: _selectedTrack?.albumArt ?? '',
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.music_note,
-                  size: 48,
-                  color: Colors.white.withOpacity(0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No anthem selected',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Add your favorite song to express your vibe',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-            child: LoadingAnimation(
-                message: "Finding your perfect meme match...")),
+          child: LoadingAnimation(
+            message: "Loading your profile...",
+          ),
+        ),
       );
     }
 
     final size = MediaQuery.of(context).size;
     final isSmallScreen = size.width < 600;
+    final isLargeScreen = size.width > 1200;
 
     return Scaffold(
       body: Container(
@@ -363,254 +245,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(30),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Profile',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 24 : 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              ElevatedButton.icon(
-                                onPressed: _openEditProfile,
-                                icon: const Icon(Icons.edit),
-                                label: const Text('Edit'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.pink,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: _openSettings,
-                                icon: const Icon(Icons.settings,
-                                    color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      CircleAvatar(
-                        radius: isSmallScreen ? 50 : 60,
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        backgroundImage: _userProfile?['profileImage'] != null
-                            ? NetworkImage(_userProfile!['profileImage'])
-                            : null,
-                        child: _userProfile?['profileImage'] == null
-                            ? Icon(
-                                Icons.person,
-                                size: isSmallScreen ? 50 : 60,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _userProfile?['name'] ?? 'Not set',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 24 : 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      if (_userProfile?['bio'] != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _userProfile!['bio'],
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: isSmallScreen ? 14 : 16,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildStatCard(
-                            icon: Icons.post_add,
-                            label: 'Posts',
-                            value: _postedMemesCount.toString(),
-                            isSelected: _showPostedMemes,
-                            onTap: () =>
-                                setState(() => _showPostedMemes = true),
-                          ),
-                          _buildStatCard(
-                            icon: Icons.favorite,
-                            label: 'Likes',
-                            value: _likedMemesCount.toString(),
-                            isSelected: !_showPostedMemes,
-                            onTap: () =>
-                                setState(() => _showPostedMemes = false),
-                          ),
-                          if (_streakInfo != null)
-                            _buildStatCard(
-                              icon: Icons.local_fire_department,
-                              label: 'Streak',
-                              value: _streakInfo!['streak'].toString(),
-                              isSelected: false,
-                              color: Colors.orange,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSection(
-                        title: 'About',
-                        content: Column(
-                          children: [
-                            _buildInfoRow(
-                                'Age', '${_userProfile?['age'] ?? 'Not set'}'),
-                            _buildInfoRow(
-                                'Gender', _userProfile?['gender'] ?? 'Not set'),
-                            _buildInfoRow('Interested In',
-                                _userProfile?['preferredGender'] ?? 'Not set'),
-                            if (_userProfile?['bio'] != null)
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Bio',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.7),
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      _userProfile!['bio'],
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      if (_userProfile?['interests'] != null &&
-                          (_userProfile!['interests'] as List).isNotEmpty)
-                        _buildSection(
-                          title: 'Interests',
-                          content: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: (_userProfile!['interests'] as List)
-                                .map((interest) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.pink.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.pink.withOpacity(0.3),
-                                  ),
-                                ),
-                                child: Text(
-                                  interest,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      _buildMusicSection(),
-                      const SizedBox(height: 24),
-                      _buildMoodBoardSection(isSmallScreen),
-                      const SizedBox(height: 24),
-                      _buildSection(
-                        title: _showPostedMemes ? 'Your Memes' : 'Liked Memes',
-                        content: _showPostedMemes
-                            ? StreamBuilder<List<MemePost>>(
-                                stream: _memeService.getUserMemes(
-                                    _userService.currentUser!.uid),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return const Center(
-                                        child: const LoadingAnimation(
-                                            message:
-                                                "Finding your perfect meme match..."));
-                                  }
-                                  return GridView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: isSmallScreen ? 2 : 3,
-                                      crossAxisSpacing: 8,
-                                      mainAxisSpacing: 8,
-                                    ),
-                                    itemCount: snapshot.data!.length,
-                                    itemBuilder: (context, index) =>
-                                        _buildMemeCard(snapshot.data![index]),
-                                  );
-                                },
-                              )
-                            : GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: isSmallScreen ? 2 : 3,
-                                  crossAxisSpacing: 8,
-                                  mainAxisSpacing: 8,
-                                ),
-                                itemCount: _likedMemes.length,
-                                itemBuilder: (context, index) =>
-                                    _buildMemeCard(_likedMemes[index]),
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: isLargeScreen
+                    ? _buildLargeScreenLayout()
+                    : _buildResponsiveLayout(isSmallScreen),
+              ),
             ),
           ),
         ),
@@ -618,77 +262,451 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSection({required String title, required Widget content}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildLargeScreenLayout() {
+    return Row(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        Container(
+          width: 300,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.2),
+            border: Border(
+              right: BorderSide(
+                color: Colors.white.withOpacity(0.1),
+              ),
+            ),
+          ),
+          child: _buildSidebarContent(),
+        ),
+        Expanded(
+          child: CustomScrollView(
+            slivers: [
+              _buildAppBar(false),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          children: [
+                            _buildMusicSection(),
+                            const SizedBox(height: 24),
+                            _buildMoodBoardSection(false),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            _buildUserStats(),
+                            const SizedBox(height: 24),
+                            _buildMemesSection(false),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        content,
       ],
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildResponsiveLayout(bool isSmallScreen) {
+    return CustomScrollView(
+      slivers: [
+        _buildAppBar(isSmallScreen),
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              _buildProfileHeader(isSmallScreen),
+              Padding(
+                padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+                child: Column(
+                  children: [
+                    _buildUserStats(),
+                    const SizedBox(height: 24),
+                    _buildMusicSection(),
+                    const SizedBox(height: 24),
+                    _buildMoodBoardSection(isSmallScreen),
+                    const SizedBox(height: 24),
+                    _buildMemesSection(isSmallScreen),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebarContent() {
+    return Column(
+      children: [
+        const SizedBox(height: 32),
+        CircleAvatar(
+          radius: 60,
+          backgroundColor: Colors.white.withOpacity(0.2),
+          backgroundImage: _userProfile?['profileImage'] != null
+              ? NetworkImage(_userProfile!['profileImage'])
+              : null,
+          child: _userProfile?['profileImage'] == null
+              ? Icon(
+                  Icons.person,
+                  size: 60,
+                  color: Colors.white.withOpacity(0.8),
+                )
+              : null,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _userProfile?['name'] ?? 'Not set',
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        if (_userProfile?['bio'] != null) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              _userProfile!['bio'],
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+        const SizedBox(height: 32),
+        _buildSidebarStats(),
+        const Spacer(),
+        _buildSidebarActions(),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildSidebarStats() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          Text(
+          _buildStatRow(
+            icon: Icons.post_add,
+            label: 'Posts',
+            value: _postedMemesCount.toString(),
+          ),
+          const SizedBox(height: 16),
+          _buildStatRow(
+            icon: Icons.favorite,
+            label: 'Likes',
+            value: _likedMemesCount.toString(),
+          ),
+          if (_streakInfo != null) ...[
+            const SizedBox(height: 16),
+            _buildStatRow(
+              icon: Icons.local_fire_department,
+              label: 'Streak',
+              value: _streakInfo!['streak'].toString(),
+              color: Colors.orange,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (color ?? Colors.pink).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color ?? Colors.pink, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 14,
             ),
           ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebarActions() {
+    return Column(
+      children: [
+        ElevatedButton.icon(
+          onPressed: _openEditProfile,
+          icon: const Icon(Icons.edit),
+          label: const Text('Edit Profile'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.pink,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 32,
+              vertical: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: _openSettings,
+          icon: const Icon(Icons.settings),
+          label: const Text('Settings'),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppBar(bool isSmallScreen) {
+    return SliverAppBar(
+      expandedHeight: isSmallScreen ? 0 : 200,
+      pinned: true,
+      backgroundColor: Colors.transparent,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.pink.shade900,
+                Colors.purple.shade900,
+              ],
+            ),
+          ),
+          child: !isSmallScreen
+              ? Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _userProfile?['profileImage'] !=
+                                    null
+                                ? NetworkImage(_userProfile!['profileImage'])
+                                : null,
+                            child: _userProfile?['profileImage'] == null
+                                ? Text(
+                                    _userProfile?['name']?[0].toUpperCase() ??
+                                        '?',
+                                    style: const TextStyle(fontSize: 32),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _userProfile?['name'] ?? 'Not set',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : null,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.edit, color: Colors.white),
+          onPressed: _openEditProfile,
+        ),
+        IconButton(
+          icon: const Icon(Icons.settings, color: Colors.white),
+          onPressed: _openSettings,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileHeader(bool isSmallScreen) {
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(30),
+        ),
+      ),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: isSmallScreen ? 50 : 60,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            backgroundImage: _userProfile?['profileImage'] != null
+                ? NetworkImage(_userProfile!['profileImage'])
+                : null,
+            child: _userProfile?['profileImage'] == null
+                ? Icon(
+                    Icons.person,
+                    size: isSmallScreen ? 50 : 60,
+                    color: Colors.white,
+                  )
+                : null,
+          ),
+          const SizedBox(height: 16),
           Text(
-            value,
-            style: const TextStyle(
+            _userProfile?['name'] ?? 'Not set',
+            style: TextStyle(
+              fontSize: isSmallScreen ? 24 : 28,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
-              fontSize: 16,
+            ),
+          ),
+          if (_userProfile?['bio'] != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _userProfile!['bio'],
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: isSmallScreen ? 14 : 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserStats() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'Stats',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem(
+                icon: Icons.post_add,
+                value: _postedMemesCount.toString(),
+                label: 'Posts',
+                color: Colors.green,
+                onTap: () => setState(() => _showPostedMemes = true),
+                isSelected: _showPostedMemes,
+              ),
+              _buildStatItem(
+                icon: Icons.favorite,
+                value: _likedMemesCount.toString(),
+                label: 'Likes',
+                color: Colors.pink,
+                onTap: () => setState(() => _showPostedMemes = false),
+                isSelected: !_showPostedMemes,
+              ),
+              if (_streakInfo != null)
+                _buildStatItem(
+                  icon: Icons.local_fire_department,
+                  value: _streakInfo!['streak'].toString(),
+                  label: 'Streak',
+                  color: Colors.orange,
+                ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard({
+  Widget _buildStatItem({
     required IconData icon,
-    required String label,
     required String value,
-    required bool isSelected,
-    Color? color,
+    required String label,
+    required Color color,
     VoidCallback? onTap,
+    bool isSelected = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.pink : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              color: color ?? Colors.white,
-              size: 24,
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color),
             ),
             const SizedBox(height: 8),
             Text(
@@ -712,69 +730,412 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMemeCard(MemePost meme) {
+  Widget _buildMusicSection() {
+    final hasAnthem = _userProfile?['anthem'] != null;
+
     return Container(
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        image: DecorationImage(
-          image: NetworkImage(meme.memeUrl),
-          fit: BoxFit.cover,
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
         ),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withOpacity(0.7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'My Anthem',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _showSpotifyTrackPicker,
+                icon: const Icon(Icons.edit, color: Colors.pink),
+                label: Text(
+                  hasAnthem ? 'Change Song' : 'Add Song',
+                  style: const TextStyle(color: Colors.pink),
+                ),
+              ),
             ],
           ),
-        ),
-        padding: const EdgeInsets.all(8),
-        alignment: Alignment.bottomLeft,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              meme.caption,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
+          const SizedBox(height: 16),
+          if (hasAnthem)
+            SpotifyPlayer(
+              trackUri: _userProfile!['anthem'],
+              trackName: _userProfile!['songTitle'] ?? '',
+              artistName: _userProfile!['artistName'] ?? '',
+              albumArt: _selectedTrack?.albumArt ?? '',
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (meme.songTitle != null) ...[
-              const SizedBox(height: 4),
-              Row(
+              child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.music_note,
-                    color: Colors.white,
-                    size: 12,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.5),
                   ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      meme.songTitle!,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 16),
+                  Text(
+                    'No anthem selected',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 16,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your favorite song to express your vibe',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoodBoardSection(bool isSmallScreen) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Mood Board',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MoodBoardEditorScreen(
+                        initialImages: List<String>.from(
+                            _userProfile?['moodBoardImages'] ?? []),
+                        onSave: (updatedImages) async {
+                          try {
+                            final currentUser = _userService.currentUser;
+                            if (currentUser != null) {
+                              await _userService.updateUserProfile(
+                                userId: currentUser.uid,
+                                moodBoardImages: updatedImages,
+                                interests: List<String>.from(
+                                    _userProfile?['interests'] ?? []),
+                              );
+                              await _loadUserProfile();
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content:
+                                        Text('Error updating mood board: $e')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.edit, color: Colors.pink),
+                label: const Text(
+                  'Edit',
+                  style: TextStyle(color: Colors.pink),
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 16),
+          if ((_userProfile?['moodBoardImages'] as List?)?.isEmpty ?? true)
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.image,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Your mood board is empty',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add images that represent your vibe',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: isSmallScreen ? 2 : 3,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount:
+                  (_userProfile?['moodBoardImages'] as List?)?.length ?? 0,
+              itemBuilder: (context, index) {
+                final images =
+                    List<String>.from(_userProfile?['moodBoardImages'] ?? []);
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: DecorationImage(
+                      image: NetworkImage(images[index]),
+                      fit: BoxFit.cover,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemesSection(bool isSmallScreen) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _showPostedMemes ? 'My Memes' : 'Liked Memes',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _showPostedMemes
+              ? StreamBuilder<List<MemePost>>(
+                  stream:
+                      _memeService.getUserMemes(_userService.currentUser!.uid),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(
+                        child: LoadingAnimation(
+                          message: "Loading your memes...",
+                        ),
+                      );
+                    }
+                    return _buildMemeGrid(snapshot.data!, isSmallScreen);
+                  },
+                )
+              : _buildMemeGrid(_likedMemes, isSmallScreen),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemeGrid(List<MemePost> memes, bool isSmallScreen) {
+    if (memes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              _showPostedMemes ? Icons.post_add : Icons.favorite,
+              size: 48,
+              color: Colors.white.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _showPostedMemes
+                  ? 'You haven\'t posted any memes yet'
+                  : 'No liked memes yet',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _showPostedMemes
+                  ? 'Share your first meme with the community!'
+                  : 'Start liking memes to see them here',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isSmallScreen ? 2 : 3,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: memes.length,
+      itemBuilder: (context, index) => _buildMemeCard(memes[index]),
+    );
+  }
+
+  Widget _buildMemeCard(MemePost meme) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              meme.memeUrl,
+              fit: BoxFit.cover,
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.7),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 12,
+              right: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    meme.caption,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (meme.songTitle != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.music_note,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            meme.songTitle!,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 }

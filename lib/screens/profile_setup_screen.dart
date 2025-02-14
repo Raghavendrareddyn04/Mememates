@@ -6,6 +6,7 @@ import '../services/cloudinary_service.dart';
 import 'mood_board_editor_screen.dart';
 import '../widgets/spotify_track_picker.dart';
 import '../services/spotify_service.dart';
+import 'dart:math';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -15,7 +16,7 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final PageController _pageController = PageController();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -25,6 +26,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   final _imagePicker = ImagePicker();
 
   late AnimationController _fadeController;
+  late AnimationController _scaleController;
+  late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
 
   int _currentStep = 0;
@@ -62,20 +65,40 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
+  }
+
+  void _initializeAnimations() {
     _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _slideController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
+
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
       curve: Curves.easeIn,
     );
+
     _fadeController.forward();
+    _scaleController.forward();
+    _slideController.forward();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _scaleController.dispose();
+    _slideController.dispose();
     _nameController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -161,7 +184,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
 
   void _nextStep() {
     if (_currentStep == 0) {
-      // Validate basic info before proceeding
       if (!_formKey.currentState!.validate() ||
           _gender == null ||
           _age == null) {
@@ -199,7 +221,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Additional validation for required fields
     if (_nameController.text.isEmpty || _age == null || _gender == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -264,27 +285,68 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             ],
           ),
         ),
-        child: SafeArea(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _buildHeader(isSmallScreen),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _buildBasicInfoStep(isSmallScreen, isLargeScreen),
-                      _buildMoodBoardStep(isSmallScreen, isLargeScreen),
-                      _buildMusicStep(isSmallScreen, isLargeScreen),
-                    ],
-                  ),
+        child: Stack(
+          children: [
+            ...List.generate(20, (index) {
+              final random = Random();
+              return Positioned(
+                left: random.nextDouble() * size.width,
+                top: random.nextDouble() * size.height,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(seconds: 2 + random.nextInt(3)),
+                  builder: (context, value, child) {
+                    return Transform.translate(
+                      offset: Offset(
+                        0,
+                        sin(value * pi * 2) * 10,
+                      ),
+                      child: Opacity(
+                        opacity: 0.3,
+                        child: Container(
+                          width: 4 + random.nextDouble() * 4,
+                          height: 4 + random.nextDouble() * 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withOpacity(0.5),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                _buildNavigationButtons(isSmallScreen),
-              ],
+              );
+            }),
+            SafeArea(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildHeader(isSmallScreen),
+                    Expanded(
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _buildBasicInfoStep(isSmallScreen, isLargeScreen),
+                          _buildMoodBoardStep(isSmallScreen, isLargeScreen),
+                          _buildMusicStep(isSmallScreen, isLargeScreen),
+                        ],
+                      ),
+                    ),
+                    _buildNavigationButtons(isSmallScreen),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

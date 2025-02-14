@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import 'dart:ui';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -38,12 +39,17 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _initializeAnimations();
+  }
 
+  void _initializeAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -54,13 +60,23 @@ class _SettingsScreenState extends State<SettingsScreen>
       curve: Curves.easeIn,
     );
 
-    _animationController.forward();
-  }
+    _scaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    _animationController.forward();
   }
 
   Future<void> _loadSettings() async {
@@ -124,6 +140,10 @@ class _SettingsScreenState extends State<SettingsScreen>
             const SnackBar(
               content: Text('Settings saved successfully'),
               backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
             ),
           );
         }
@@ -134,6 +154,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           SnackBar(
             content: Text('Error saving settings: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
           ),
         );
       }
@@ -145,34 +169,46 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.width < 600;
+    final isMediumScreen = size.width >= 600 && size.width < 1200;
+    final isLargeScreen = size.width >= 1200;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              color: Colors.black.withOpacity(0.2),
+            ),
+          ),
+        ),
         title: const Text(
           'Settings',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.deepPurple.shade900,
-                Colors.purple.shade900,
-              ],
-            ),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
         ),
         actions: [
           TextButton.icon(
             onPressed: _isLoading ? null : _saveSettings,
             icon: const Icon(Icons.save, color: Colors.white),
-            label: const Text('Save', style: TextStyle(color: Colors.white)),
+            label: const Text(
+              'Save',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildLoadingState()
           : Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -187,95 +223,240 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               child: FadeTransition(
                 opacity: _fadeAnimation,
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 16 : size.width * 0.1,
-                      vertical: 24,
-                    ),
-                    child: Column(
-                      children: [
-                        _buildSection(
-                          title: 'Discovery Preferences',
-                          icon: Icons.explore,
-                          children: [
-                            _buildAgeRangeSlider(),
-                            const SizedBox(height: 24),
-                            _buildGenderPreference(),
-                            const SizedBox(height: 24),
-                            _buildDistanceSlider(),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        _buildSection(
-                          title: 'App Preferences',
-                          icon: Icons.settings,
-                          children: [
-                            _buildSwitchTile(
-                              title: 'Autoplay Music',
-                              subtitle: 'Play music automatically in profiles',
-                              icon: Icons.music_note,
-                              value: _autoplayMusic,
-                              onChanged: (value) =>
-                                  setState(() => _autoplayMusic = value),
-                            ),
-                            _buildSwitchTile(
-                              title: 'Show Age',
-                              subtitle: 'Display your age on your profile',
-                              icon: Icons.cake,
-                              value: _showAge,
-                              onChanged: (value) =>
-                                  setState(() => _showAge = value),
-                            ),
-                            _buildSwitchTile(
-                              title: 'Private Mood Board',
-                              subtitle: 'Only matches can see your mood board',
-                              icon: Icons.lock,
-                              value: _privateMoodBoard,
-                              onChanged: (value) =>
-                                  setState(() => _privateMoodBoard = value),
-                            ),
-                            _buildSwitchTile(
-                              title: 'Show Online Status',
-                              subtitle: 'Let others see when you are active',
-                              icon: Icons.visibility,
-                              value: _showOnlineStatus,
-                              onChanged: (value) =>
-                                  setState(() => _showOnlineStatus = value),
-                            ),
-                            _buildSwitchTile(
-                              title: 'Receive Notifications',
-                              subtitle:
-                                  'Get notified about new matches and messages',
-                              icon: Icons.notifications,
-                              value: _receiveNotifications,
-                              onChanged: (value) =>
-                                  setState(() => _receiveNotifications = value),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        _buildSection(
-                          title: 'Meme Categories',
-                          icon: Icons.category,
-                          children: [
-                            _buildMemeCategories(),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        _buildSection(
-                          title: 'Account',
-                          icon: Icons.person,
-                          children: [
-                            _buildAccountOptions(),
-                          ],
-                        ),
-                      ],
-                    ),
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: isLargeScreen
+                        ? _buildLargeScreenLayout()
+                        : isMediumScreen
+                            ? _buildMediumScreenLayout()
+                            : _buildSmallScreenLayout(),
                   ),
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.deepPurple.shade900,
+            Colors.purple.shade900,
+            Colors.pink.shade900,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Loading your preferences...',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLargeScreenLayout() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSection(
+                  title: 'Discovery Preferences',
+                  icon: Icons.explore,
+                  children: [
+                    _buildAgeRangeSlider(),
+                    const SizedBox(height: 24),
+                    _buildGenderPreference(),
+                    const SizedBox(height: 24),
+                    _buildDistanceSlider(),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        Container(
+          width: 1,
+          color: Colors.white.withOpacity(0.1),
+        ),
+        Expanded(
+          flex: 1,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSection(
+                  title: 'App Preferences',
+                  icon: Icons.settings,
+                  children: _buildAppPreferences(),
+                ),
+                const SizedBox(height: 24),
+                _buildSection(
+                  title: 'Meme Categories',
+                  icon: Icons.category,
+                  children: [
+                    _buildMemeCategories(),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        Container(
+          width: 1,
+          color: Colors.white.withOpacity(0.1),
+        ),
+        Expanded(
+          flex: 1,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSection(
+                  title: 'Account',
+                  icon: Icons.person,
+                  children: [
+                    _buildAccountOptions(),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMediumScreenLayout() {
+    return Row(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSection(
+                  title: 'Discovery Preferences',
+                  icon: Icons.explore,
+                  children: [
+                    _buildAgeRangeSlider(),
+                    const SizedBox(height: 24),
+                    _buildGenderPreference(),
+                    const SizedBox(height: 24),
+                    _buildDistanceSlider(),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSection(
+                  title: 'App Preferences',
+                  icon: Icons.settings,
+                  children: _buildAppPreferences(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Container(
+          width: 1,
+          color: Colors.white.withOpacity(0.1),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _buildSection(
+                  title: 'Meme Categories',
+                  icon: Icons.category,
+                  children: [
+                    _buildMemeCategories(),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSection(
+                  title: 'Account',
+                  icon: Icons.person,
+                  children: [
+                    _buildAccountOptions(),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSmallScreenLayout() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildSection(
+            title: 'Discovery Preferences',
+            icon: Icons.explore,
+            children: [
+              _buildAgeRangeSlider(),
+              const SizedBox(height: 24),
+              _buildGenderPreference(),
+              const SizedBox(height: 24),
+              _buildDistanceSlider(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildSection(
+            title: 'App Preferences',
+            icon: Icons.settings,
+            children: _buildAppPreferences(),
+          ),
+          const SizedBox(height: 24),
+          _buildSection(
+            title: 'Meme Categories',
+            icon: Icons.category,
+            children: [
+              _buildMemeCategories(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildSection(
+            title: 'Account',
+            icon: Icons.person,
+            children: [
+              _buildAccountOptions(),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -291,6 +472,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         border: Border.all(
           color: Colors.white.withOpacity(0.2),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,7 +487,14 @@ class _SettingsScreenState extends State<SettingsScreen>
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(icon, color: Colors.white, size: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.pink.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: Colors.pink),
+                ),
                 const SizedBox(width: 12),
                 Text(
                   title,
@@ -312,7 +507,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
-          const Divider(color: Colors.white24),
+          Container(
+            height: 1,
+            color: Colors.white.withOpacity(0.1),
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(children: children),
@@ -322,99 +520,44 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildAgeRangeSlider() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Age Range: ${_ageRange.start.round()} - ${_ageRange.end.round()}',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: Colors.pink,
-            inactiveTrackColor: Colors.white.withOpacity(0.3),
-            thumbColor: Colors.white,
-            overlayColor: Colors.pink.withOpacity(0.3),
-            valueIndicatorColor: Colors.pink,
-            valueIndicatorTextStyle: const TextStyle(color: Colors.white),
-          ),
-          child: RangeSlider(
-            values: _ageRange,
-            min: 18,
-            max: 100,
-            divisions: 82,
-            labels: RangeLabels(
-              _ageRange.start.round().toString(),
-              _ageRange.end.round().toString(),
-            ),
-            onChanged: (values) => setState(() => _ageRange = values),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGenderPreference() {
-    return DropdownButtonFormField<String>(
-      value: _preferredGender,
-      style: const TextStyle(color: Colors.white),
-      dropdownColor: Colors.deepPurple,
-      decoration: InputDecoration(
-        labelText: 'Show Me',
-        labelStyle: const TextStyle(color: Colors.white70),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white),
-        ),
+  List<Widget> _buildAppPreferences() {
+    return [
+      _buildSwitchTile(
+        title: 'Autoplay Music',
+        subtitle: 'Play music automatically in profiles',
+        icon: Icons.music_note,
+        value: _autoplayMusic,
+        onChanged: (value) => setState(() => _autoplayMusic = value),
       ),
-      items: ['All', 'Male', 'Female', 'Non-binary']
-          .map((gender) => DropdownMenuItem(value: gender, child: Text(gender)))
-          .toList(),
-      onChanged: (value) => setState(() => _preferredGender = value),
-    );
-  }
-
-  Widget _buildDistanceSlider() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Maximum Distance: ${_maxDistance.round()} km',
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: Colors.pink,
-            inactiveTrackColor: Colors.white.withOpacity(0.3),
-            thumbColor: Colors.white,
-            overlayColor: Colors.pink.withOpacity(0.3),
-            valueIndicatorColor: Colors.pink,
-            valueIndicatorTextStyle: const TextStyle(color: Colors.white),
-          ),
-          child: Slider(
-            value: _maxDistance,
-            min: 1,
-            max: 100,
-            divisions: 99,
-            label: '${_maxDistance.round()} km',
-            onChanged: (value) => setState(() => _maxDistance = value),
-          ),
-        ),
-      ],
-    );
+      _buildSwitchTile(
+        title: 'Show Age',
+        subtitle: 'Display your age on your profile',
+        icon: Icons.cake,
+        value: _showAge,
+        onChanged: (value) => setState(() => _showAge = value),
+      ),
+      _buildSwitchTile(
+        title: 'Private Mood Board',
+        subtitle: 'Only matches can see your mood board',
+        icon: Icons.lock,
+        value: _privateMoodBoard,
+        onChanged: (value) => setState(() => _privateMoodBoard = value),
+      ),
+      _buildSwitchTile(
+        title: 'Show Online Status',
+        subtitle: 'Let others see when you are active',
+        icon: Icons.visibility,
+        value: _showOnlineStatus,
+        onChanged: (value) => setState(() => _showOnlineStatus = value),
+      ),
+      _buildSwitchTile(
+        title: 'Receive Notifications',
+        subtitle: 'Get notified about new matches and messages',
+        icon: Icons.notifications,
+        value: _receiveNotifications,
+        onChanged: (value) => setState(() => _receiveNotifications = value),
+      ),
+    ];
   }
 
   Widget _buildSwitchTile({
@@ -446,11 +589,171 @@ class _SettingsScreenState extends State<SettingsScreen>
             color: Colors.white.withOpacity(0.7),
           ),
         ),
-        secondary: Icon(icon, color: Colors.pink),
+        secondary: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.pink.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: Colors.pink),
+        ),
         activeColor: Colors.pink,
         inactiveThumbColor: Colors.white,
         inactiveTrackColor: Colors.white.withOpacity(0.3),
       ),
+    );
+  }
+
+  Widget _buildAgeRangeSlider() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Age Range',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.pink.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_ageRange.start.round()} - ${_ageRange.end.round()} years',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: Colors.pink,
+            inactiveTrackColor: Colors.white.withOpacity(0.3),
+            thumbColor: Colors.white,
+            overlayColor: Colors.pink.withOpacity(0.3),
+            valueIndicatorColor: Colors.pink,
+            valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+          ),
+          child: RangeSlider(
+            values: _ageRange,
+            min: 18,
+            max: 100,
+            divisions: 82,
+            labels: RangeLabels(
+              _ageRange.start.round().toString(),
+              _ageRange.end.round().toString(),
+            ),
+            onChanged: (values) => setState(() => _ageRange = values),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenderPreference() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Show Me',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.9),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: _preferredGender,
+            style: const TextStyle(color: Colors.white),
+            dropdownColor: Colors.deepPurple.shade900,
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            items: ['All', 'Male', 'Female', 'Non-binary']
+                .map((gender) => DropdownMenuItem(
+                      value: gender,
+                      child: Text(gender),
+                    ))
+                .toList(),
+            onChanged: (value) => setState(() => _preferredGender = value),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDistanceSlider() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Maximum Distance',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.pink.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_maxDistance.round()} km',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: Colors.pink,
+            inactiveTrackColor: Colors.white.withOpacity(0.3),
+            thumbColor: Colors.white,
+            overlayColor: Colors.pink.withOpacity(0.3),
+            valueIndicatorColor: Colors.pink,
+            valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+          ),
+          child: Slider(
+            value: _maxDistance,
+            min: 1,
+            max: 100,
+            divisions: 99,
+            label: '${_maxDistance.round()} km',
+            onChanged: (value) => setState(() => _maxDistance = value),
+          ),
+        ),
+      ],
     );
   }
 
@@ -460,25 +763,35 @@ class _SettingsScreenState extends State<SettingsScreen>
       runSpacing: 8,
       children: _memeCategories.map((category) {
         final isSelected = _selectedCategories.contains(category);
-        return FilterChip(
-          label: Text(category),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() {
-              if (selected) {
-                _selectedCategories.add(category);
-              } else {
-                _selectedCategories.remove(category);
-              }
-            });
-          },
-          backgroundColor: Colors.white.withOpacity(0.1),
-          selectedColor: Colors.pink,
-          checkmarkColor: Colors.white,
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : Colors.black,
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          child: FilterChip(
+            label: Text(category),
+            selected: isSelected,
+            onSelected: (selected) {
+              setState(() {
+                if (selected) {
+                  _selectedCategories.add(category);
+                } else {
+                  _selectedCategories.remove(category);
+                }
+              });
+            },
+            backgroundColor: Colors.white.withOpacity(0.1),
+            selectedColor: Colors.pink,
+            checkmarkColor: Colors.white,
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : Colors.white70,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isSelected ? Colors.pink : Colors.white24,
+              ),
+            ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         );
       }).toList(),
     );
@@ -531,9 +844,16 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       child: ListTile(
         onTap: onTap,
-        leading: Icon(
-          icon,
-          color: isDestructive ? Colors.red : Colors.pink,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (isDestructive ? Colors.red : Colors.pink).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: isDestructive ? Colors.red : Colors.pink,
+          ),
         ),
         title: Text(
           title,
@@ -581,6 +901,9 @@ class _SettingsScreenState extends State<SettingsScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Logout'),
           ),
@@ -631,11 +954,20 @@ class _SettingsScreenState extends State<SettingsScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Deactivate'),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 }

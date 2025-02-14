@@ -36,6 +36,12 @@ dependencies:
   audio_video_progress_bar: ^2.0.3
   image: 4.3.0
 
+  flutter_animate: ^4.5.2
+  rive: ^0.13.20
+  shimmer: ^3.0.0
+  lottie: ^3.2.0
+
+
 
 dev_dependencies:
   flutter_test:
