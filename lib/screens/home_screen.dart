@@ -786,14 +786,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   const Text(
                     'MemeMates',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white, // Gold color applied
+                      fontSize: 20, // Optional: Adjust if needed
+                    ),
                   ),
                   if (_currentIndex == 1)
                     IconButton(
                       icon: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: const Color(0xFFFFD700)
+                              .withOpacity(0.1), // Changed to gold with opacity
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -843,7 +848,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.favorite),
+                  icon: const Icon(Icons.favorite,
+                      color: Colors.white), // Change color here
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -855,7 +861,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 IconButton(
                   icon: NotificationBadge(
-                    child: const Icon(Icons.notifications),
+                    child: const Icon(Icons.notifications,
+                        color: Colors.red), // Change color here
                   ),
                   onPressed: () => Navigator.push(
                     context,
@@ -865,7 +872,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.diamond),
+                  icon: const Icon(Icons.diamond,
+                      color: Colors.amber), // Change color here
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
