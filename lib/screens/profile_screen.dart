@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
+import 'package:flutter_auth/services/meme_service.dart';
+import 'package:flutter_auth/services/user_service.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
-import '../services/user_service.dart';
-import '../services/meme_service.dart';
+
 import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
@@ -280,7 +282,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         Expanded(
           child: CustomScrollView(
             slivers: [
-              _buildAppBar(false),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
@@ -322,7 +323,37 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildResponsiveLayout(bool isSmallScreen) {
     return CustomScrollView(
       slivers: [
-        _buildAppBar(isSmallScreen),
+        SliverAppBar(
+          expandedHeight: 0,
+          floating: true,
+          pinned: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.white),
+              onPressed: _openEditProfile,
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings, color: Colors.white),
+              onPressed: _openSettings,
+            ),
+          ],
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.pink.shade900,
+                    Colors.purple.shade900,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         SliverToBoxAdapter(
           child: Column(
             children: [
@@ -498,81 +529,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           style: TextButton.styleFrom(
             foregroundColor: Colors.white,
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAppBar(bool isSmallScreen) {
-    return SliverAppBar(
-      expandedHeight: isSmallScreen ? 0 : 200,
-      pinned: true,
-      backgroundColor: Colors.transparent,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.pink.shade900,
-                Colors.purple.shade900,
-              ],
-            ),
-          ),
-          child: !isSmallScreen
-              ? Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                        ),
-                      ),
-                    ),
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundImage: _userProfile?['profileImage'] !=
-                                    null
-                                ? NetworkImage(_userProfile!['profileImage'])
-                                : null,
-                            child: _userProfile?['profileImage'] == null
-                                ? Text(
-                                    _userProfile?['name']?[0].toUpperCase() ??
-                                        '?',
-                                    style: const TextStyle(fontSize: 32),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _userProfile?['name'] ?? 'Not set',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              : null,
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.edit, color: Colors.white),
-          onPressed: _openEditProfile,
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings, color: Colors.white),
-          onPressed: _openSettings,
         ),
       ],
     );
@@ -837,45 +793,100 @@ class _ProfileScreenState extends State<ProfileScreen>
                   color: Colors.white,
                 ),
               ),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MoodBoardEditorScreen(
-                        initialImages: List<String>.from(
-                            _userProfile?['moodBoardImages'] ?? []),
-                        onSave: (updatedImages) async {
-                          try {
-                            final currentUser = _userService.currentUser;
-                            if (currentUser != null) {
-                              await _userService.updateUserProfile(
-                                userId: currentUser.uid,
-                                moodBoardImages: updatedImages,
-                                interests: List<String>.from(
-                                    _userProfile?['interests'] ?? []),
-                              );
-                              await _loadUserProfile();
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content:
-                                        Text('Error updating mood board: $e')),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                },
+              PopupMenuButton<String>(
                 icon: const Icon(Icons.edit, color: Colors.pink),
-                label: const Text(
-                  'Edit',
-                  style: TextStyle(color: Colors.pink),
-                ),
+                color: Colors.deepPurple.shade900,
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'upload',
+                    child: Row(
+                      children: [
+                        Icon(Icons.upload, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Upload Images',
+                            style: TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'editor',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Open Editor',
+                            style: TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'upload') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MoodBoardUploadScreen(
+                          initialImages: List<String>.from(
+                              _userProfile?['moodBoardImages'] ?? []),
+                          onSave: (updatedImages) async {
+                            try {
+                              final currentUser = _userService.currentUser;
+                              if (currentUser != null) {
+                                await _userService.updateUserProfile(
+                                  userId: currentUser.uid,
+                                  moodBoardImages: updatedImages,
+                                  interests: List<String>.from(
+                                      _userProfile?['interests'] ?? []),
+                                );
+                                await _loadUserProfile();
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'Error updating mood board: $e')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  } else if (value == 'editor') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MoodBoardEditorScreen(
+                          initialImages: List<String>.from(
+                              _userProfile?['moodBoardImages'] ?? []),
+                          onSave: (updatedImages) async {
+                            try {
+                              final currentUser = _userService.currentUser;
+                              if (currentUser != null) {
+                                await _userService.updateUserProfile(
+                                  userId: currentUser.uid,
+                                  moodBoardImages: updatedImages,
+                                  interests: List<String>.from(
+                                      _userProfile?['interests'] ?? []),
+                                );
+                                await _loadUserProfile();
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'Error updating mood board: $e')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),

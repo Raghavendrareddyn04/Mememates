@@ -1,117 +1,231 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class CloudinaryService {
   static final CloudinaryService _instance = CloudinaryService._internal();
   factory CloudinaryService() => _instance;
 
   late final CloudinaryPublic cloudinary;
-  final String _cloudName =
-      'drbkajmvf'; // Replace with your Cloudinary cloud name
+  final String cloudName = 'drbkajmvf';
+  final String _uploadPreset = 'Mememates';
 
   CloudinaryService._internal() {
     cloudinary = CloudinaryPublic(
-      _cloudName,
-      'Mememates',
+      cloudName,
+      _uploadPreset,
       cache: false,
     );
   }
 
-  /// ✅ Upload Image to Cloudinary
-  Future<String> uploadImage(String imagePath,
-      {String? topText, String? bottomText}) async {
+  Future<String> uploadImage(String imagePath) async {
     try {
-      final file = File(imagePath);
       final response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
-          file.path,
+          imagePath,
           resourceType: CloudinaryResourceType.Image,
-          folder: 'mememates/moodboard',
+          folder: 'mememates/memes',
         ),
       );
-      print('Uploaded Image URL: ${response.secureUrl}');
       return response.secureUrl;
     } catch (e) {
+      print('Cloudinary upload error: $e');
       throw 'Failed to upload image: $e';
     }
   }
 
-  /// ✅ Apply Transformations (Crop, Resize)
+  Future<String> uploadImageWithTransformations(
+    String imagePath,
+    List<String> transformations,
+  ) async {
+    try {
+      final response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          imagePath,
+          resourceType: CloudinaryResourceType.Image,
+          folder: 'mememates/memes',
+        ),
+      );
+
+      final publicId = response.publicId;
+      final transformationString = transformations.join('/');
+
+      return 'https://res.cloudinary.com/$cloudName/image/upload/$transformationString/$publicId';
+    } catch (e) {
+      print('Cloudinary upload error: $e');
+      throw 'Failed to upload image: $e';
+    }
+  }
+
   Future<String> processImage(
-    String publicId, {
+    String url, {
     int? width,
     int? height,
     String? crop,
   }) async {
     try {
+      final publicId = _extractPublicId(url);
       final List<String> transformations = [];
+
       if (width != null) transformations.add('w_$width');
       if (height != null) transformations.add('h_$height');
       if (crop != null) transformations.add('c_$crop');
 
-      final transformedUrl =
-          'https://res.cloudinary.com/$_cloudName/image/upload/${transformations.join(",")}/$publicId.jpg';
-
-      print('Processed Image URL: $transformedUrl');
-      return transformedUrl;
+      return 'https://res.cloudinary.com/$cloudName/image/upload/${transformations.join(",")}/v1/$publicId';
     } catch (e) {
       throw 'Failed to process image: $e';
     }
   }
 
-  /// ✅ Add Text & Sticker Overlays
-  Future<String> addOverlay(
-    String publicId, {
-    String? text,
-    String? stickerUrl,
-    required Offset position,
-    String? overlay,
+  Future<String> addTextOverlay(
+    String imageUrl, {
+    String? topText,
+    String? bottomText,
+    Color textColor = Colors.white,
   }) async {
     try {
+      final publicId = _extractPublicId(imageUrl);
       final List<String> transformations = [];
+
+      // Convert color to RGB format
+      final colorString =
+          'co_rgb:${(textColor.red / 255).toStringAsFixed(2)}_${(textColor.green / 255).toStringAsFixed(2)}_${(textColor.blue / 255).toStringAsFixed(2)}';
+
+      if (topText != null && topText.isNotEmpty) {
+        final encodedText = Uri.encodeComponent(topText);
+        transformations.add(
+          'l_text:Arial_70_bold:$encodedText/$colorString/g_north,y_50/fl_layer_apply',
+        );
+      }
+
+      if (bottomText != null && bottomText.isNotEmpty) {
+        final encodedText = Uri.encodeComponent(bottomText);
+        transformations.add(
+          'l_text:Arial_70_bold:$encodedText/$colorString/g_south,y_50/fl_layer_apply',
+        );
+      }
+
+      if (transformations.isEmpty) {
+        return imageUrl;
+      }
+
+      return 'https://res.cloudinary.com/$cloudName/image/upload/${transformations.join("/")}/v1/$publicId';
+    } catch (e) {
+      throw 'Failed to add text overlay: $e';
+    }
+  }
+
+  Future<String> addOverlay(
+    String baseImage, {
+    String? text,
+    String? overlay,
+    required Offset position,
+  }) async {
+    try {
+      if (baseImage.isEmpty && text == null && overlay == null) {
+        throw 'No content to overlay';
+      }
+
+      final List<String> transformations = [];
+      final basePublicId =
+          baseImage.isEmpty ? 'blank' : _extractPublicId(baseImage);
 
       if (text != null) {
         final encodedText = Uri.encodeComponent(text);
         transformations.add(
-          'l_text:Arial_50_bold:$encodedText,co_white,x_${position.dx.toInt()},y_${position.dy.toInt()}',
-        );
+            'l_text:Arial_50_bold:$encodedText/co_white/x_${position.dx.toInt()}/y_${position.dy.toInt()}/fl_layer_apply');
       }
 
-      if (stickerUrl != null) {
-        final encodedSticker = Uri.encodeComponent(stickerUrl);
-        transformations.add(
-          'l_fetch:$encodedSticker,x_${position.dx.toInt()},y_${position.dy.toInt()}',
-        );
+      if (overlay != null) {
+        if (overlay.contains('res.cloudinary.com/$cloudName')) {
+          final overlayPublicId = _extractPublicId(overlay);
+          transformations.add(
+              'l_$overlayPublicId/w_300/h_300/x_${position.dx.toInt()}/y_${position.dy.toInt()}/fl_layer_apply');
+        } else {
+          final encodedUrl = Uri.encodeComponent(overlay);
+          transformations.add(
+              'l_fetch:$encodedUrl/w_300/h_300/x_${position.dx.toInt()}/y_${position.dy.toInt()}/fl_layer_apply');
+        }
       }
 
-      final transformedUrl =
-          'https://res.cloudinary.com/$_cloudName/image/upload/${transformations.join(",")}/$publicId.jpg';
-
-      print('Overlay Image URL: $transformedUrl');
-      return transformedUrl;
+      return 'https://res.cloudinary.com/$cloudName/image/upload/${transformations.join("/")}/v1/$basePublicId';
     } catch (e) {
       throw 'Failed to add overlay: $e';
     }
   }
 
-  /// ✅ Generate Final Mood Board URL
+  String _extractPublicId(String url) {
+    final uri = Uri.parse(url);
+    final pathSegments = uri.pathSegments;
+
+    // Find the index after 'upload' in the path
+    final uploadIndex = pathSegments.indexOf('upload');
+    if (uploadIndex != -1 && uploadIndex < pathSegments.length - 1) {
+      // Join all segments after 'upload', excluding any version numbers
+      final remainingSegments = pathSegments
+          .sublist(uploadIndex + 1)
+          .where((segment) => !segment.startsWith('v'))
+          .join('/');
+
+      // Remove file extension if present
+      return remainingSegments.replaceAll(RegExp(r'\.[^.]+$'), '');
+    }
+
+    // Fallback: return the last path segment without extension
+    final lastSegment = pathSegments.last;
+    return lastSegment.replaceAll(RegExp(r'\.[^.]+$'), '');
+  }
+
   Future<String> generateMoodBoard(
-      String baseImageId, List<String> elements) async {
+      String backgroundColor, List<String> elements) async {
     try {
       final List<String> transformations = [];
+      transformations.add('b_rgb:$backgroundColor');
 
-      for (var element in elements) {
-        transformations.add('l_$element');
+      for (var i = 0; i < elements.length; i++) {
+        final element = elements[i];
+        final x = (i % 2) * 300;
+        final y = (i ~/ 2) * 300;
+
+        if (element.contains("res.cloudinary.com/$cloudName")) {
+          final publicId = _extractPublicId(element);
+          transformations
+              .add('l_$publicId/w_300/h_300/x_$x/y_$y/fl_layer_apply');
+        } else {
+          final encodedUrl = Uri.encodeComponent(element);
+          transformations
+              .add('l_fetch:$encodedUrl/w_300/h_300/x_$x/y_$y/fl_layer_apply');
+        }
       }
 
-      final moodBoardUrl =
-          'https://res.cloudinary.com/$_cloudName/image/upload/${transformations.join(",")}/$baseImageId.jpg';
-
-      print('Final Mood Board URL: $moodBoardUrl');
-      return moodBoardUrl;
+      return 'https://res.cloudinary.com/$cloudName/image/upload/${transformations.join("/")}/blank.jpg';
     } catch (e) {
       throw 'Failed to generate mood board: $e';
+    }
+  }
+
+  Future<String> storeMoodBoard(String moodBoardUrl) async {
+    try {
+      final apiUrl = 'https://api.cloudinary.com/v1_1/$cloudName/image/upload';
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      final params = {
+        'file': moodBoardUrl,
+        'timestamp': timestamp.toString(),
+        'upload_preset': _uploadPreset,
+        'type': 'fetch',
+      };
+
+      final response = await http.post(Uri.parse(apiUrl), body: params);
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return jsonResponse['secure_url'];
+      } else {
+        throw 'Failed to store mood board: ${response.body}';
+      }
+    } catch (e) {
+      throw 'Failed to store mood board: $e';
     }
   }
 }

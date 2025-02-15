@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/auth_service.dart';
+import 'mood_board_editor_screen.dart';
 
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
@@ -107,6 +108,97 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     }
   }
 
+  void _navigateToMoodBoardEditor() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MoodBoardEditorScreen(
+          initialImages: const [],
+          onSave: (images) async {
+            try {
+              final currentUser = _authService.currentUser;
+              if (currentUser != null) {
+                await _firestore
+                    .collection('users')
+                    .doc(currentUser.uid)
+                    .update({
+                  'moodBoardImages': images,
+                });
+                await _loadMoodBoards(); // Reload mood boards after saving
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error saving mood board: $e')),
+                );
+              }
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleLike(MoodBoardPost post) async {
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final likeRef = _firestore.collection('moodboard_likes').doc(post.userId);
+      await _firestore.runTransaction((transaction) async {
+        final likeDoc = await transaction.get(likeRef);
+        if (!likeDoc.exists) {
+          transaction.set(likeRef, {
+            'likedBy': [currentUser.uid]
+          });
+        } else {
+          List<String> likedBy =
+              List<String>.from(likeDoc.data()?['likedBy'] ?? []);
+          if (!likedBy.contains(currentUser.uid)) {
+            likedBy.add(currentUser.uid);
+            transaction.update(likeRef, {'likedBy': likedBy});
+          }
+        }
+      });
+
+      // Refresh the mood boards to show updated likes
+      await _loadMoodBoards();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error liking mood board: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleComment(MoodBoardPost post, String comment) async {
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await _firestore
+          .collection('moodboard_comments')
+          .doc(post.userId)
+          .collection('comments')
+          .add({
+        'userId': currentUser.uid,
+        'userName': currentUser.displayName ?? 'Anonymous',
+        'content': comment,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Refresh the mood boards to show updated comments
+      await _loadMoodBoards();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding comment: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -155,7 +247,12 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 ],
               ),
       ),
-      floatingActionButton: _buildFloatingActionButton(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _navigateToMoodBoardEditor,
+        backgroundColor: Colors.pink,
+        icon: const Icon(Icons.add_photo_alternate),
+        label: const Text('Create'),
+      ),
     );
   }
 
@@ -165,6 +262,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       floating: true,
       pinned: true,
       stretch: true,
+      automaticallyImplyLeading: false,
       backgroundColor: Colors.transparent,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
@@ -271,7 +369,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 selectedColor: Colors.pink,
                 checkmarkColor: Colors.white,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? Colors.white : Colors.black,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
                 padding: EdgeInsets.symmetric(
@@ -341,6 +439,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -361,15 +462,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 Expanded(child: _buildMoodBoardImages(post)),
                 _buildCardFooter(post, isWideScreen),
               ],
-            ),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _showMoodBoardDetails(post),
-                onDoubleTap: () => _handleLike(post),
-                splashColor: Colors.white.withOpacity(0.1),
-                highlightColor: Colors.transparent,
-              ),
             ),
           ],
         ),
@@ -473,6 +565,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 
   Widget _buildCardFooter(MoodBoardPost post, bool isWideScreen) {
+    final currentUser = _authService.currentUser;
+    final hasLiked =
+        currentUser != null && post.likes.contains(currentUser.uid);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -486,11 +582,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildActionButton(
-            icon: post.likes.contains(_authService.currentUser?.uid)
-                ? Icons.favorite
-                : Icons.favorite_border,
+            icon: hasLiked ? Icons.favorite : Icons.favorite_border,
             label: post.likes.length.toString(),
-            color: Colors.pink,
+            color: hasLiked ? Colors.pink : Colors.white,
             onTap: () => _handleLike(post),
           ),
           _buildActionButton(
@@ -564,9 +658,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: () {
-              // Navigate to mood board creation
-            },
+            onPressed: _navigateToMoodBoardEditor,
             icon: const Icon(Icons.add_photo_alternate),
             label: const Text('Create Mood Board'),
             style: ElevatedButton.styleFrom(
@@ -586,82 +678,59 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     );
   }
 
-  Widget _buildFloatingActionButton() {
-    return FloatingActionButton.extended(
-      onPressed: () {
-        // Navigate to mood board creation
-      },
-      backgroundColor: Colors.pink,
-      icon: const Icon(Icons.add_photo_alternate),
-      label: const Text('Create'),
-    );
-  }
-
-  void _showMoodBoardDetails(MoodBoardPost post) {
+  void _showOptionsMenu(MoodBoardPost post) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        maxChildSize: 0.95,
-        minChildSize: 0.5,
-        builder: (context, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Colors.deepPurple.shade900,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade900,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
               ),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildUserHeader(post),
-                    const SizedBox(height: 16),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
-                      itemCount: post.images.length,
-                      itemBuilder: (context, index) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            image: DecorationImage(
-                              image: NetworkImage(post.images[index]),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.report_outlined, color: Colors.orange),
+              title: const Text(
+                'Report',
+                style: TextStyle(color: Colors.white),
               ),
-            ],
-          ),
+              onTap: () {
+                Navigator.pop(context);
+                // Handle report
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_outlined, color: Colors.red),
+              title: const Text(
+                'Block User',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // Handle block
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
   }
 
   void _showComments(MoodBoardPost post) {
+    final commentController = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -749,117 +818,62 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 },
               ),
             ),
-            _buildCommentInput(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCommentInput() {
-    final commentController = TextEditingController();
-    return Container(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        border: Border(
-          top: BorderSide(
-            color: Colors.white.withOpacity(0.1),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: commentController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Add a comment...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.send, color: Colors.pink),
-            onPressed: () {
-              // Handle comment submission
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showOptionsMenu(MoodBoardPost post) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Colors.deepPurple.shade900,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
             Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 8,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+              ),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
+                color: Colors.white.withOpacity(0.1),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: commentController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Add a comment...',
+                        hintStyle:
+                            TextStyle(color: Colors.white.withOpacity(0.7)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.1),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Colors.pink),
+                    onPressed: () {
+                      if (commentController.text.isNotEmpty) {
+                        _handleComment(post, commentController.text);
+                        commentController.clear();
+                        Navigator.pop(context);
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.report_outlined, color: Colors.orange),
-              title: const Text(
-                'Report',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                // Handle report
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.block_outlined, color: Colors.red),
-              title: const Text(
-                'Block User',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                // Handle block
-              },
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _handleLike(MoodBoardPost post) async {
-    // Implement like functionality
   }
 
   void _handleShare(MoodBoardPost post) {

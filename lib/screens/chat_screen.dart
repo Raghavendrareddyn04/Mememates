@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import 'dart:async';
 import '../models/user_profile.dart';
 import '../models/meme_post.dart';
@@ -184,7 +185,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: LoadingAnimation(
+            message: "Loading your chat...",
+          ),
+        ),
       );
     }
 
@@ -394,7 +399,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (!snapshot.hasData) {
           return const Center(
-            child: CircularProgressIndicator(),
+            child: LoadingAnimation(
+              message: "LOading your chat...",
+            ),
           );
         }
 

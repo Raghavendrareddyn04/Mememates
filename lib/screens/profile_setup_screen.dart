@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
@@ -462,20 +463,55 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
               ),
             ),
             const SizedBox(height: 32),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: _openMoodBoardEditor,
-                icon: const Icon(Icons.edit),
-                label: const Text('Open Mood Board Editor'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pink,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Expanded(
+                  child: _buildOptionButton(
+                    icon: Icons.upload,
+                    label: 'Upload Images',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MoodBoardUploadScreen(
+                            initialImages: _moodBoardImages,
+                            onSave: (images) {
+                              setState(() {
+                                _moodBoardImages.clear();
+                                _moodBoardImages.addAll(images);
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildOptionButton(
+                    icon: Icons.edit,
+                    label: 'Open Editor',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MoodBoardEditorScreen(
+                            initialImages: _moodBoardImages,
+                            onSave: (images) {
+                              setState(() {
+                                _moodBoardImages.clear();
+                                _moodBoardImages.addAll(images);
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             if (_moodBoardImages.isNotEmpty)
@@ -502,6 +538,38 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildOptionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white.withOpacity(0.1),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 20,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: Colors.white.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 32),
+          const SizedBox(height: 8),
+          Text(label),
+        ],
       ),
     );
   }
