@@ -17,6 +17,7 @@ import 'messages_screen.dart';
 import 'vibe_match_screen.dart';
 import 'meme_creator_screen.dart';
 import 'discovery_screen.dart';
+import 'dart:math';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -257,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // Add this to prevent expansion
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
@@ -490,9 +491,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       name: meme.userName,
       age: 0,
       moodBoard: [],
-      anthem: meme.songTitle ?? '',
+      anthem: meme.videoTitle ?? '',
       artistName: meme.artistName ?? '',
-      songTitle: meme.songTitle ?? '',
+      videoTitle: meme.videoTitle ?? '',
       hasLikedMe: true,
       canMessage: true,
       profileImage: meme.userProfileImage,
@@ -788,8 +789,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     'MemeMates',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white, // Gold color applied
-                      fontSize: 20, // Optional: Adjust if needed
+                      color: Colors.white,
+                      fontSize: 20,
                     ),
                   ),
                   if (_currentIndex == 1)
@@ -797,8 +798,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       icon: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700)
-                              .withOpacity(0.1), // Changed to gold with opacity
+                          color: const Color(0xFFFFD700).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -848,8 +848,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.favorite,
-                      color: Colors.white), // Change color here
+                  icon: const Icon(Icons.favorite, color: Colors.white),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -861,8 +860,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 IconButton(
                   icon: NotificationBadge(
-                    child: const Icon(Icons.notifications,
-                        color: Colors.red), // Change color here
+                    child: const Icon(Icons.notifications, color: Colors.red),
                   ),
                   onPressed: () => Navigator.push(
                     context,
@@ -872,8 +870,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.diamond,
-                      color: Colors.amber), // Change color here
+                  icon: const Icon(Icons.diamond, color: Colors.amber),
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -959,13 +956,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ),
       floatingActionButton: _currentIndex == 1
-          ? ScaleTransition(
-              scale: _fabAnimation,
-              child: FloatingActionButton(
-                onPressed: _showPostMemeDialog,
-                backgroundColor: Colors.pink,
-                child: const Icon(Icons.add_photo_alternate),
-              ),
+          ? Stack(
+              children: [
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ScaleTransition(
+                    scale: _fabAnimation,
+                    child: FloatingActionButton.extended(
+                      onPressed: _showPostMemeDialog,
+                      backgroundColor: Colors.pink,
+                      icon: const Icon(Icons.add_photo_alternate),
+                      label: const Text('Create'),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16, right: 16),
+                    child: FloatingActionButton(
+                      onPressed: _showPostMemeDialog,
+                      backgroundColor: Colors.pink,
+                      child: const Icon(Icons.add_photo_alternate),
+                    ),
+                  ),
+                ),
+              ],
             )
           : null,
     );
@@ -1002,49 +1018,77 @@ class _MemeCard extends StatefulWidget {
 
 class _MemeCardState extends State<_MemeCard>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
   bool _isLiked = false;
   bool _isPassed = false;
   bool _isProcessing = false;
-  bool _isDismissed = false;
+  bool _showRevertOption = false;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  final Random _random = Random();
 
+  final List<String> _datingQuotes = [
+    "Sometimes the perfect match comes when you least expect it! 💫",
+    "Your meme game is strong, and so is your heart! 💝",
+    "Great minds meme alike! 🎭",
+    "You've got great taste in memes! 🌟",
+    "That's a match made in meme heaven! ✨",
+    "Keep spreading the joy, one meme at a time! 🎪",
+    "When memes align, magic happens! 🌈",
+    "Your sense of humor is truly one of a kind! 🎯",
+  ];
+  final List<String> _passMessages = [
+    "No worries, plenty more memes to explore! 🌟",
+    "Changed your mind? Give it another chance! 🔄",
+    "Keep swiping, your perfect meme match awaits! ✨",
+    "Not your style? That's totally fine! 👍",
+    "Next one might be the one! 🎯",
+    "Trust your instincts and keep exploring! 🚀"
+  ];
+
+  String _currentQuote = '';
   @override
   void initState() {
     super.initState();
     _isLiked = widget.meme.isLikedBy(widget.currentUserId);
     _isPassed = widget.meme.isPassedBy(widget.currentUserId);
+    _initializeAnimation();
+    _currentQuote = _datingQuotes[_random.nextInt(_datingQuotes.length)];
+  }
 
+  void _initializeAnimation() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutQuart,
-    ));
-
-    _animationController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() => _isDismissed = true);
-      }
-    });
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.8).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
   }
 
   Future<void> _handleLike() async {
-    if (_isProcessing || _isDismissed) return;
-    setState(() => _isProcessing = true);
+    if (_isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+      _isLiked = true;
+      _showRevertOption = false;
+      _currentQuote = _datingQuotes[_random.nextInt(_datingQuotes.length)];
+    });
+
+    await _animationController.forward();
 
     try {
-      await _animationController.forward();
       widget.onLike();
-    } catch (e) {
-      _animationController.reverse();
       if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLiked = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
@@ -1053,19 +1097,32 @@ class _MemeCardState extends State<_MemeCard>
       if (mounted) {
         setState(() => _isProcessing = false);
       }
+      await _animationController.reverse();
     }
   }
 
   Future<void> _handlePass() async {
-    if (_isProcessing || _isDismissed) return;
-    setState(() => _isProcessing = true);
+    if (_isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+      _isPassed = true;
+      _showRevertOption = true;
+      _currentQuote = _passMessages[_random.nextInt(_passMessages.length)];
+    });
+
+    await _animationController.forward();
 
     try {
-      await _animationController.forward();
       widget.onPass();
-    } catch (e) {
-      _animationController.reverse();
       if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isPassed = false;
+          _showRevertOption = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
@@ -1074,13 +1131,212 @@ class _MemeCardState extends State<_MemeCard>
       if (mounted) {
         setState(() => _isProcessing = false);
       }
+      await _animationController.reverse();
     }
+  }
+
+  Future<void> _handleRevert() async {
+    await _animationController.forward();
+    setState(() {
+      _isPassed = false;
+      _showRevertOption = false;
+    });
+    await _animationController.reverse();
+  }
+
+  Widget _buildPlaceholder() {
+    if (_isLiked) {
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.pink.shade400,
+                Colors.purple.shade400,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.pink.shade200.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.favorite,
+                      color: Colors.white,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _currentQuote,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      "Keep swiping to find more matches!",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (_isPassed && _showRevertOption) {
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.grey.shade800,
+                Colors.grey.shade600,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.undo,
+                      color: Colors.white,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _currentQuote,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Changed your mind?",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Don't worry, we all make quick decisions sometimes!",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _handleRevert,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.grey.shade800,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 4,
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh),
+                          SizedBox(width: 8),
+                          Text(
+                            "Give it another chance",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isDismissed) {
-      return const SizedBox.shrink();
+    if (_isLiked || (_isPassed && _showRevertOption)) {
+      return _buildPlaceholder();
     }
 
     return ScaleTransition(
@@ -1167,11 +1423,24 @@ class _MemeCardState extends State<_MemeCard>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          subtitle: Text(
-                            widget.meme.caption,
-                            style: const TextStyle(fontSize: 14),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.meme.caption,
+                                style: const TextStyle(fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.meme.timestamp,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.more_vert),
@@ -1186,7 +1455,6 @@ class _MemeCardState extends State<_MemeCard>
                                       title: const Text('Report'),
                                       onTap: () {
                                         Navigator.pop(context);
-                                        // Show report dialog
                                       },
                                     ),
                                     ListTile(
@@ -1194,7 +1462,6 @@ class _MemeCardState extends State<_MemeCard>
                                       title: const Text('Block User'),
                                       onTap: () {
                                         Navigator.pop(context);
-                                        // Show block confirmation
                                       },
                                     ),
                                   ],
@@ -1228,13 +1495,13 @@ class _MemeCardState extends State<_MemeCard>
                             ),
                           ),
                         ),
-                        if (widget.meme.songTitle != null)
+                        if (widget.meme.videoTitle != null)
                           ListTile(
                             dense: true,
                             leading: const Icon(Icons.music_note,
                                 color: Colors.deepPurple),
                             title: Text(
-                              widget.meme.songTitle!,
+                              widget.meme.videoTitle!,
                               style: const TextStyle(fontSize: 14),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1249,9 +1516,7 @@ class _MemeCardState extends State<_MemeCard>
                                 : null,
                             trailing: IconButton(
                               icon: const Icon(Icons.play_circle),
-                              onPressed: () {
-                                // Play song preview
-                              },
+                              onPressed: () {},
                             ),
                           ),
                         Padding(

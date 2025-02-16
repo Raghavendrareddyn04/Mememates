@@ -3,14 +3,12 @@ import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
 import 'package:flutter_auth/services/meme_service.dart';
 import 'package:flutter_auth/services/user_service.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
-
+import '../widgets/youtube_track_picker.dart';
 import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
 import 'mood_board_editor_screen.dart';
-import '../widgets/spotify_player.dart';
-import '../widgets/spotify_track_picker.dart';
-import '../services/spotify_service.dart';
+import '../widgets/youtube_player.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,7 +28,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _postedMemesCount = 0;
   int _likedMemesCount = 0;
   bool _showPostedMemes = true;
-  SpotifyTrack? _selectedTrack;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -169,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showSpotifyTrackPicker() {
+  void _showYouTubeTrackPicker() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -193,20 +190,22 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: SpotifyTrackPicker(
+              child: YouTubeTrackPicker(
                 onTrackSelected: (track) async {
-                  setState(() => _selectedTrack = track);
                   final currentUser = _userService.currentUser;
                   if (currentUser != null) {
                     await _userService.updateUserProfile(
                       userId: currentUser.uid,
-                      anthem: track.uri,
-                      artistName: track.artist,
-                      songTitle: track.name,
+                      anthem: track.id,
+                      artistName: track.author,
+                      videoTitle: track.title,
                       interests:
                           List<String>.from(_userProfile?['interests'] ?? []),
                     );
                     await _loadUserProfile();
+                  }
+                  if (mounted) {
+                    Navigator.pop(context);
                   }
                 },
               ),
@@ -713,7 +712,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
               TextButton.icon(
-                onPressed: _showSpotifyTrackPicker,
+                onPressed: _showYouTubeTrackPicker,
                 icon: const Icon(Icons.edit, color: Colors.pink),
                 label: Text(
                   hasAnthem ? 'Change Song' : 'Add Song',
@@ -724,11 +723,12 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const SizedBox(height: 16),
           if (hasAnthem)
-            SpotifyPlayer(
-              trackUri: _userProfile!['anthem'],
-              trackName: _userProfile!['songTitle'] ?? '',
-              artistName: _userProfile!['artistName'] ?? '',
-              albumArt: _selectedTrack?.albumArt ?? '',
+            YouTubePlayer(
+              videoId: _userProfile!['anthem'],
+              title: _userProfile!['videoTitle'] ?? '',
+              author: _userProfile!['artistName'] ?? '',
+              thumbnailUrl: '',
+              audioStreamUrl: '',
             )
           else
             Container(
@@ -1111,7 +1111,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (meme.songTitle != null) ...[
+                  if (meme.videoId != null) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -1123,7 +1123,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            meme.songTitle!,
+                            meme.videoTitle!,
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,

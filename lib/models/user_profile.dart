@@ -5,7 +5,7 @@ class UserProfile {
   final List<String> moodBoard;
   final String anthem;
   final String artistName;
-  final String songTitle;
+  final String videoTitle;
   final bool hasLikedMe;
   final String? profileImage;
   bool canMessage;
@@ -17,7 +17,7 @@ class UserProfile {
     required this.moodBoard,
     required this.anthem,
     required this.artistName,
-    required this.songTitle,
+    required this.videoTitle,
     required this.hasLikedMe,
     required this.canMessage,
     this.profileImage,

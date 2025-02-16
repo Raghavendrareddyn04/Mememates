@@ -133,6 +133,81 @@ class _MessagesScreenState extends State<MessagesScreen>
     final isLargeScreen = size.width > 1200;
 
     return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.purple.shade800.withOpacity(0.8),
+                Colors.pink.shade400.withOpacity(0.8),
+              ],
+            ),
+          ),
+        ),
+        elevation: 0,
+        title: Column(
+          children: [
+            Text(
+              'Where Hearts Connect',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isSmallScreen ? 20 : 24,
+                fontWeight: FontWeight.w600,
+                fontStyle: FontStyle.italic,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.2),
+                    offset: const Offset(1, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              'Your Love Story Begins Here',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: isSmallScreen ? 12 : 14,
+                fontWeight: FontWeight.w400,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.2),
+                    offset: const Offset(1, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
+        actions: [
+          if (!isSmallScreen)
+            IconButton(
+              icon: const Icon(Icons.filter_list, color: Colors.white),
+              onPressed: () {
+                // Implement filter functionality
+              },
+            ),
+          IconButton(
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search,
+              color: Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                  _filterChats('');
+                }
+              });
+            },
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -148,7 +223,6 @@ class _MessagesScreenState extends State<MessagesScreen>
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(isSmallScreen, isLargeScreen),
               _buildSearchBar(isSmallScreen),
               Expanded(
                 child: _isLoading
@@ -162,68 +236,6 @@ class _MessagesScreenState extends State<MessagesScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(bool isSmallScreen, bool isLargeScreen) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Messages',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isSmallScreen ? 28 : 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${_chats.length} conversations',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: isSmallScreen ? 14 : 16,
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              if (!isSmallScreen)
-                IconButton(
-                  icon: const Icon(Icons.filter_list, color: Colors.white),
-                  onPressed: () {
-                    // Implement filter functionality
-                  },
-                ),
-              IconButton(
-                icon: Icon(
-                  _isSearching ? Icons.close : Icons.search,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _isSearching = !_isSearching;
-                    if (!_isSearching) {
-                      _searchController.clear();
-                      _filterChats('');
-                    }
-                  });
-                },
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -532,7 +544,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                   List<String>.from(userProfile['moodBoardImages'] ?? []),
               anthem: userProfile['anthem'] ?? '',
               artistName: userProfile['artistName'] ?? '',
-              songTitle: userProfile['songTitle'] ?? '',
+              videoTitle: userProfile['songTitle'] ?? '',
               hasLikedMe: true,
               canMessage: true,
               profileImage: userProfile['profileImage'],

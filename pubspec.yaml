@@ -37,11 +37,12 @@ dependencies:
   url_launcher: ^6.3.1
   audio_video_progress_bar: ^2.0.3
   image: 4.3.0
-
+  youtube_explode_dart: ^2.3.9
+  youtube_player_flutter: ^9.1.1
   flutter_animate: ^4.5.2
   rive: ^0.13.20
   shimmer: ^3.0.0
-  lottie: ^3.2.0
+
 
 
 

@@ -180,7 +180,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
           gender: _gender,
           preferredGender: _preferredGender,
           artistName: _artistName,
-          songTitle: _songTitle,
+          videoTitle: _songTitle,
           interests: _interests,
         );
 

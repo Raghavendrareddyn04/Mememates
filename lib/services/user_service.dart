@@ -16,7 +16,7 @@ class UserService {
     required List<String> moodBoardImages,
     String? anthem,
     String? artistName,
-    String? songTitle,
+    String? videoTitle,
     String? profileImage,
   }) async {
     try {
@@ -28,7 +28,7 @@ class UserService {
         'moodBoardImages': moodBoardImages,
         'anthem': anthem,
         'artistName': artistName,
-        'songTitle': songTitle,
+        'videoTitle': videoTitle,
         'profileImage': profileImage,
         'createdAt': FieldValue.serverTimestamp(),
         'settings': {
@@ -95,7 +95,7 @@ class UserService {
     int? age,
     String? gender,
     String? preferredGender,
-    String? songTitle,
+    String? videoTitle,
     String? artistName,
     required List<String> interests,
   }) async {
@@ -109,6 +109,8 @@ class UserService {
       if (bio != null) updates['bio'] = bio;
       if (moodBoardImages != null) updates['moodBoardImages'] = moodBoardImages;
       if (anthem != null) updates['anthem'] = anthem;
+      if (videoTitle != null) updates['videoTitle'] = videoTitle;
+      if (artistName != null) updates['artistName'] = artistName;
       if (profileImage != null) {
         updates['profileImage'] = profileImage;
         await _auth.currentUser?.updatePhotoURL(profileImage);

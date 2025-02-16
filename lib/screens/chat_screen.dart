@@ -7,6 +7,7 @@ import '../services/meme_service.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import 'meme_detail_screen.dart';
+import '../widgets/youtube_player.dart';
 
 class ChatScreen extends StatefulWidget {
   final UserProfile profile;
@@ -651,24 +652,14 @@ class _ChatScreenState extends State<ChatScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          if (widget.profile.anthem.isNotEmpty) ...[
-            ListTile(
-              leading: const Icon(Icons.music_note, color: Colors.pink),
-              title: const Text(
-                'Anthem',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text(
-                widget.profile.anthem,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                ),
-              ),
+          if (widget.profile.anthem.isNotEmpty)
+            YouTubePlayer(
+              videoId: widget.profile.anthem,
+              title: widget.profile.videoTitle,
+              author: widget.profile.artistName,
+              thumbnailUrl: '', // This will be fetched from the video details
+              audioStreamUrl: '', // This will be fetched from the video details
             ),
-          ],
           const SizedBox(height: 16),
           const Text(
             'Mood Board',

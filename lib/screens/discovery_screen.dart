@@ -1,8 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_auth/models/meme_post.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/auth_service.dart';
 import 'mood_board_editor_screen.dart';
+import 'mood_board_upload_screen.dart';
+import 'meme_detail_screen.dart';
 
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
@@ -108,32 +112,169 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     }
   }
 
-  void _navigateToMoodBoardEditor() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MoodBoardEditorScreen(
-          initialImages: const [],
-          onSave: (images) async {
-            try {
-              final currentUser = _authService.currentUser;
-              if (currentUser != null) {
-                await _firestore
-                    .collection('users')
-                    .doc(currentUser.uid)
-                    .update({
-                  'moodBoardImages': images,
-                });
-                await _loadMoodBoards(); // Reload mood boards after saving
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error saving mood board: $e')),
+  void _showCreateOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade900,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Create Mood Board',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildCreateOption(
+              icon: Icons.upload,
+              title: 'Upload Images',
+              description: 'Choose images from your gallery',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MoodBoardUploadScreen(
+                      initialImages: const [],
+                      onSave: (images) async {
+                        try {
+                          final currentUser = _authService.currentUser;
+                          if (currentUser != null) {
+                            await _firestore
+                                .collection('users')
+                                .doc(currentUser.uid)
+                                .update({
+                              'moodBoardImages': images,
+                            });
+                            await _loadMoodBoards();
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Error saving mood board: $e')),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
                 );
-              }
-            }
-          },
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildCreateOption(
+              icon: Icons.edit,
+              title: 'Open Editor',
+              description: 'Create a custom mood board',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MoodBoardEditorScreen(
+                      initialImages: const [],
+                      onSave: (images) async {
+                        try {
+                          final currentUser = _authService.currentUser;
+                          if (currentUser != null) {
+                            await _firestore
+                                .collection('users')
+                                .doc(currentUser.uid)
+                                .update({
+                              'moodBoardImages': images,
+                            });
+                            await _loadMoodBoards();
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Error saving mood board: $e')),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.pink),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white.withOpacity(0.5),
+                size: 16,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -145,51 +286,61 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
 
     try {
       final likeRef = _firestore.collection('moodboard_likes').doc(post.userId);
-      await _firestore.runTransaction((transaction) async {
-        final likeDoc = await transaction.get(likeRef);
-        if (!likeDoc.exists) {
-          transaction.set(likeRef, {
-            'likedBy': [currentUser.uid]
-          });
-        } else {
-          List<String> likedBy =
-              List<String>.from(likeDoc.data()?['likedBy'] ?? []);
-          if (!likedBy.contains(currentUser.uid)) {
-            likedBy.add(currentUser.uid);
-            transaction.update(likeRef, {'likedBy': likedBy});
-          }
-        }
-      });
 
-      // Refresh the mood boards to show updated likes
-      await _loadMoodBoards();
+      if (post.likes.contains(currentUser.uid)) {
+        // Remove like
+        await likeRef.update({
+          'likedBy': FieldValue.arrayRemove([currentUser.uid])
+        });
+        setState(() {
+          post.likes.remove(currentUser.uid);
+        });
+      } else {
+        // Add like
+        await likeRef.set({
+          'likedBy': FieldValue.arrayUnion([currentUser.uid])
+        }, SetOptions(merge: true));
+        setState(() {
+          post.likes.add(currentUser.uid);
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error liking mood board: $e')),
+          SnackBar(content: Text('Error updating like: $e')),
         );
       }
     }
   }
 
-  Future<void> _handleComment(MoodBoardPost post, String comment) async {
+  Future<void> _handleComment(MoodBoardPost post, String commentText) async {
     final currentUser = _authService.currentUser;
     if (currentUser == null) return;
 
     try {
-      await _firestore
+      final commentRef = _firestore
           .collection('moodboard_comments')
           .doc(post.userId)
-          .collection('comments')
-          .add({
-        'userId': currentUser.uid,
-        'userName': currentUser.displayName ?? 'Anonymous',
-        'content': comment,
-        'timestamp': FieldValue.serverTimestamp(),
+          .collection('comments');
+
+      final comment = Comment(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: currentUser.uid,
+        userName: currentUser.displayName ?? 'Anonymous',
+        content: commentText,
+        timestamp: DateTime.now(),
+      );
+
+      await commentRef.doc(comment.id).set({
+        'userId': comment.userId,
+        'userName': comment.userName,
+        'content': comment.content,
+        'timestamp': comment.timestamp,
       });
 
-      // Refresh the mood boards to show updated comments
-      await _loadMoodBoards();
+      setState(() {
+        post.comments.add(comment);
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,483 +350,67 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.width < 600;
-    final isMediumScreen = size.width >= 600 && size.width < 1200;
-    final isLargeScreen = size.width >= 1200;
+  Future<void> _navigateToMemeDetails(MoodBoardPost post) async {
+    try {
+      // Get user's memes
+      final memesSnapshot = await _firestore
+          .collection('memes')
+          .where('userId', isEqualTo: post.userId)
+          .orderBy('createdAt', descending: true)
+          .get();
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.deepPurple.shade900,
-              Colors.purple.shade900,
-              Colors.pink.shade900,
-            ],
-          ),
-        ),
-        child: _isLoading
-            ? const Center(
-                child: LoadingAnimation(
-                  message: "Discovering amazing mood boards...",
-                ),
-              )
-            : CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  _buildAppBar(isSmallScreen),
-                  if (_showFilters) _buildFiltersBar(isSmallScreen),
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 16 : 24,
-                      vertical: isSmallScreen ? 16 : 24,
-                    ),
-                    sliver: _moodBoards.isEmpty
-                        ? SliverFillRemaining(
-                            child: _buildEmptyState(isSmallScreen))
-                        : isLargeScreen
-                            ? _buildLargeScreenGrid()
-                            : isMediumScreen
-                                ? _buildMediumScreenGrid()
-                                : _buildSmallScreenGrid(),
-                  ),
-                ],
+      if (memesSnapshot.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No memes found for this user')),
+          );
+        }
+        return;
+      }
+
+      final memeDoc = memesSnapshot.docs.first;
+      final memeData = memeDoc.data();
+
+      // Get the latest likes and comments for the meme
+      final likesDoc = await _firestore
+          .collection('memes')
+          .doc(memeDoc.id)
+          .collection('likes')
+          .doc('likedBy')
+          .get();
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MemeDetailScreen(
+              meme: MemePost(
+                id: memeDoc.id,
+                userId: post.userId,
+                userName: post.userName,
+                memeUrl: memeData['memeUrl'] ?? '',
+                caption: memeData['caption'] ?? '',
+                videoId: memeData['videoId'],
+                videoTitle: memeData['videoTitle'],
+                artistName: memeData['artistName'],
+                createdAt: (memeData['createdAt'] as Timestamp).toDate(),
+                likedByUsers:
+                    List<String>.from(likesDoc.data()?['users'] ?? []),
+                passedByUsers:
+                    List<String>.from(memeData['passedByUsers'] ?? []),
+                userProfileImage: post.userProfileImage,
               ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToMoodBoardEditor,
-        backgroundColor: Colors.pink,
-        icon: const Icon(Icons.add_photo_alternate),
-        label: const Text('Create'),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(bool isSmallScreen) {
-    return SliverAppBar(
-      expandedHeight: isSmallScreen ? 120 : 160,
-      floating: true,
-      pinned: true,
-      stretch: true,
-      automaticallyImplyLeading: false,
-      backgroundColor: Colors.transparent,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.deepPurple.shade900.withOpacity(0.9),
-                Colors.purple.shade900.withOpacity(0.9),
-              ],
             ),
           ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ShaderMask(
-                  shaderCallback: (bounds) => LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
-                  ).createShader(bounds),
-                  blendMode: BlendMode.dstIn,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.pink.withOpacity(0.2),
-                          Colors.purple.withOpacity(0.2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: isSmallScreen ? 16 : 24,
-                left: isSmallScreen ? 16 : 24,
-                right: isSmallScreen ? 16 : 24,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Discover',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isSmallScreen ? 28 : 36,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Explore amazing mood boards from the community',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: isSmallScreen ? 14 : 16,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 5,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFiltersBar(bool isSmallScreen) {
-    return SliverToBoxAdapter(
-      child: Container(
-        height: isSmallScreen ? 48 : 56,
-        margin: EdgeInsets.symmetric(
-          vertical: isSmallScreen ? 8 : 16,
-          horizontal: isSmallScreen ? 16 : 24,
-        ),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: _filters.length,
-          itemBuilder: (context, index) {
-            final filter = _filters[index];
-            final isSelected = _selectedFilter == filter;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                label: Text(filter),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() => _selectedFilter = filter);
-                },
-                backgroundColor: Colors.white.withOpacity(0.1),
-                selectedColor: Colors.pink,
-                checkmarkColor: Colors.white,
-                labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.black,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 12 : 16,
-                  vertical: isSmallScreen ? 8 : 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: isSelected ? Colors.pink : Colors.white24,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLargeScreenGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 24,
-        mainAxisSpacing: 24,
-        childAspectRatio: 0.8,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => _buildMoodBoardCard(_moodBoards[index], true),
-        childCount: _moodBoards.length,
-      ),
-    );
-  }
-
-  Widget _buildMediumScreenGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.85,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => _buildMoodBoardCard(_moodBoards[index], true),
-        childCount: _moodBoards.length,
-      ),
-    );
-  }
-
-  Widget _buildSmallScreenGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 1,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.9,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => _buildMoodBoardCard(_moodBoards[index], false),
-        childCount: _moodBoards.length,
-      ),
-    );
-  }
-
-  Widget _buildMoodBoardCard(MoodBoardPost post, bool isWideScreen) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildUserHeader(post),
-                Expanded(child: _buildMoodBoardImages(post)),
-                _buildCardFooter(post, isWideScreen),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserHeader(MoodBoardPost post) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.white.withOpacity(0.2),
-            backgroundImage: post.userProfileImage != null
-                ? NetworkImage(post.userProfileImage!)
-                : null,
-            child: post.userProfileImage == null
-                ? Text(
-                    post.userName[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  post.userName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  '${post.images.length} images',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () => _showOptionsMenu(post),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMoodBoardImages(MoodBoardPost post) {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: post.images.length.clamp(0, 4),
-      itemBuilder: (context, index) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            image: DecorationImage(
-              image: NetworkImage(post.images[index]),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: index == 3 && post.images.length > 4
-              ? Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.black.withOpacity(0.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '+${post.images.length - 4}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                )
-              : null,
         );
-      },
-    );
-  }
-
-  Widget _buildCardFooter(MoodBoardPost post, bool isWideScreen) {
-    final currentUser = _authService.currentUser;
-    final hasLiked =
-        currentUser != null && post.likes.contains(currentUser.uid);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: Colors.white.withOpacity(0.1),
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildActionButton(
-            icon: hasLiked ? Icons.favorite : Icons.favorite_border,
-            label: post.likes.length.toString(),
-            color: hasLiked ? Colors.pink : Colors.white,
-            onTap: () => _handleLike(post),
-          ),
-          _buildActionButton(
-            icon: Icons.comment_outlined,
-            label: post.comments.length.toString(),
-            color: Colors.blue,
-            onTap: () => _showComments(post),
-          ),
-          if (isWideScreen)
-            _buildActionButton(
-              icon: Icons.share_outlined,
-              label: 'Share',
-              color: Colors.green,
-              onTap: () => _handleShare(post),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isSmallScreen) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.mood_bad_outlined,
-            size: isSmallScreen ? 64 : 96,
-            color: Colors.white.withOpacity(0.5),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No mood boards found',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isSmallScreen ? 20 : 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Be the first to share your mood board!',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: isSmallScreen ? 16 : 18,
-            ),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: _navigateToMoodBoardEditor,
-            icon: const Icon(Icons.add_photo_alternate),
-            label: const Text('Create Mood Board'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.pink,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 24 : 32,
-                vertical: isSmallScreen ? 12 : 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading meme details: $e')),
+        );
+      }
+    }
   }
 
   void _showOptionsMenu(MoodBoardPost post) {
@@ -898,6 +633,325 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 
   @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.width < 600;
+    final isMediumScreen = size.width >= 600 && size.width < 1200;
+    final isLargeScreen = size.width >= 1200;
+
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.deepPurple.shade900,
+              Colors.purple.shade900,
+              Colors.pink.shade900,
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? const Center(
+                child: LoadingAnimation(
+                  message: "Discovering amazing mood boards...",
+                ),
+              )
+            : CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  _buildAppBar(isSmallScreen),
+                  if (_showFilters) _buildFiltersBar(isSmallScreen),
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 16 : 24,
+                      vertical: isSmallScreen ? 16 : 24,
+                    ),
+                    sliver: _moodBoards.isEmpty
+                        ? SliverFillRemaining(
+                            child: _buildEmptyState(isSmallScreen))
+                        : isLargeScreen
+                            ? _buildLargeScreenGrid()
+                            : isMediumScreen
+                                ? _buildMediumScreenGrid()
+                                : _buildSmallScreenGrid(),
+                  ),
+                ],
+              ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showCreateOptions,
+        backgroundColor: Colors.pink,
+        icon: const Icon(Icons.add_photo_alternate),
+        label: const Text('Create'),
+      ),
+    );
+  }
+
+  Widget _buildAppBar(bool isSmallScreen) {
+    return SliverAppBar(
+      expandedHeight: isSmallScreen ? 120 : 160,
+      floating: true,
+      pinned: true,
+      stretch: true,
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.deepPurple.shade900.withOpacity(0.9),
+                Colors.purple.shade900.withOpacity(0.9),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ShaderMask(
+                  shaderCallback: (bounds) => LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                  ).createShader(bounds),
+                  blendMode: BlendMode.dstIn,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.pink.withOpacity(0.2),
+                          Colors.purple.withOpacity(0.2),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: isSmallScreen ? 16 : 24,
+                left: isSmallScreen ? 16 : 24,
+                right: isSmallScreen ? 16 : 24,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Discover',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isSmallScreen ? 28 : 36,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Explore amazing mood boards from the community',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: isSmallScreen ? 14 : 16,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFiltersBar(bool isSmallScreen) {
+    return SliverToBoxAdapter(
+      child: Container(
+        height: isSmallScreen ? 48 : 56,
+        margin: EdgeInsets.symmetric(
+          vertical: isSmallScreen ? 8 : 16,
+          horizontal: isSmallScreen ? 16 : 24,
+        ),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _filters.length,
+          itemBuilder: (context, index) {
+            final filter = _filters[index];
+            final isSelected = _selectedFilter == filter;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(filter),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() => _selectedFilter = filter);
+                },
+                backgroundColor: Colors.white.withOpacity(0.1),
+                selectedColor: Colors.pink,
+                checkmarkColor: Colors.white,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 12 : 16,
+                  vertical: isSmallScreen ? 8 : 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? Colors.pink : Colors.white24,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLargeScreenGrid() {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 24,
+        childAspectRatio: 0.8,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildMoodBoardCard(_moodBoards[index], true),
+        childCount: _moodBoards.length,
+      ),
+    );
+  }
+
+  Widget _buildMediumScreenGrid() {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.85,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildMoodBoardCard(_moodBoards[index], true),
+        childCount: _moodBoards.length,
+      ),
+    );
+  }
+
+  Widget _buildSmallScreenGrid() {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 1,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.9,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildMoodBoardCard(_moodBoards[index], false),
+        childCount: _moodBoards.length,
+      ),
+    );
+  }
+
+  Widget _buildMoodBoardCard(MoodBoardPost post, bool isWideScreen) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildUserHeader(post),
+                Expanded(child: _buildMoodBoardImages(post)),
+                _buildCardFooter(post, isWideScreen),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isSmallScreen) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.mood_bad_outlined,
+            size: isSmallScreen ? 64 : 96,
+            color: Colors.white.withOpacity(0.5),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No mood boards found',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isSmallScreen ? 20 : 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Be the first to share your mood board!',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: isSmallScreen ? 16 : 18,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _showCreateOptions,
+            icon: const Icon(Icons.add_photo_alternate),
+            label: const Text('Create Mood Board'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.pink,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 24 : 32,
+                vertical: isSmallScreen ? 12 : 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _scrollController.dispose();
     _animationController.dispose();
@@ -905,13 +959,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 }
 
+extension on User {
+  String? get displayName => null;
+}
+
 class MoodBoardPost {
   final String userId;
   final String userName;
   final String? userProfileImage;
   final List<String> images;
-  final List<String> likes;
-  final List<Comment> comments;
+  List<String> likes;
+  List<Comment> comments;
 
   MoodBoardPost({
     required this.userId,
@@ -937,4 +995,169 @@ class Comment {
     required this.content,
     required this.timestamp,
   });
+}
+
+extension on _DiscoveryScreenState {
+  Widget _buildUserHeader(MoodBoardPost post) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            backgroundImage: post.userProfileImage != null
+                ? NetworkImage(post.userProfileImage!)
+                : null,
+            child: post.userProfileImage == null
+                ? Text(
+                    post.userName[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post.userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  '${post.images.length} images',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onPressed: () => _showOptionsMenu(post),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoodBoardImages(MoodBoardPost post) {
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: post.images.length.clamp(0, 4),
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () => _navigateToMemeDetails(post),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              image: DecorationImage(
+                image: NetworkImage(post.images[index]),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: index == 3 && post.images.length > 4
+                ? Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '+${post.images.length - 4}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCardFooter(MoodBoardPost post, bool isWideScreen) {
+    final currentUser = _authService.currentUser;
+    final hasLiked =
+        currentUser != null && post.likes.contains(currentUser.uid);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Colors.white.withOpacity(0.1),
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildActionButton(
+            icon: hasLiked ? Icons.favorite : Icons.favorite_border,
+            label: post.likes.length.toString(),
+            color: hasLiked ? Colors.pink : Colors.white,
+            onTap: () => _handleLike(post),
+          ),
+          _buildActionButton(
+            icon: Icons.comment_outlined,
+            label: post.comments.length.toString(),
+            color: Colors.blue,
+            onTap: () => _showComments(post),
+          ),
+          if (isWideScreen)
+            _buildActionButton(
+              icon: Icons.share_outlined,
+              label: 'Share',
+              color: Colors.green,
+              onTap: () => _handleShare(post),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -249,7 +249,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         moodBoardImages: _moodBoardImages,
         anthem: _selectedTrack?.uri,
         artistName: _selectedTrack?.artist,
-        songTitle: _selectedTrack?.name,
+        videoTitle: _selectedTrack?.name,
         profileImage: _profileImageUrl,
       );
 

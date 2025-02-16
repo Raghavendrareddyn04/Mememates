@@ -155,7 +155,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
       moodBoard: List<String>.from(_posterProfile!['moodBoardImages'] ?? []),
       anthem: _posterProfile!['anthem'] ?? '',
       artistName: _posterProfile!['artistName'] ?? '',
-      songTitle: _posterProfile!['songTitle'] ?? '',
+      videoTitle: _posterProfile!['songTitle'] ?? '',
       hasLikedMe: true,
       canMessage: true,
       profileImage: widget.meme.userProfileImage,
@@ -310,10 +310,10 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
                 children: [
                   _buildMemeSection(true),
                   const SizedBox(height: 32),
-                  if (widget.meme.songTitle != null) ...[
+                  if (widget.meme.videoTitle != null) ...[
                     SpotifyPlayer(
-                      trackUri: widget.meme.songUrl ?? '',
-                      trackName: widget.meme.songTitle!,
+                      trackUri: widget.meme.videoId ?? '',
+                      trackName: widget.meme.videoTitle!,
                       artistName: widget.meme.artistName ?? '',
                       albumArt: '',
                     ),
@@ -356,10 +356,10 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
           children: [
             _buildMemeSection(isSmallScreen),
             const SizedBox(height: 24),
-            if (widget.meme.songTitle != null) ...[
+            if (widget.meme.videoTitle != null) ...[
               SpotifyPlayer(
-                trackUri: widget.meme.songUrl ?? '',
-                trackName: widget.meme.songTitle!,
+                trackUri: widget.meme.videoId ?? '',
+                trackName: widget.meme.videoTitle!,
                 artistName: widget.meme.artistName ?? '',
                 albumArt: '',
               ),
