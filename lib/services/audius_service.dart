@@ -87,7 +87,7 @@ class AudiusService {
     try {
       final tracks = await getTrendingTracks();
       return tracks
-          .take(10)
+          .take(100)
           .map((track) => {
                 'id': track['id'],
                 'title': track['title'],

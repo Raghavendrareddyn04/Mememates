@@ -251,7 +251,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         moodBoardImages: _moodBoardImages,
         audiusTrackId: _selectedTrack?['id'],
         trackTitle: _selectedTrack?['title'],
-        artistName: _selectedTrack?['user']['name'],
+        artistName: _selectedTrack?['user'],
         profileImage: _profileImageUrl,
       );
 
@@ -621,7 +621,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
               AudiusPlayer(
                 trackId: _selectedTrack!['id'],
                 title: _selectedTrack!['title'],
-                artistName: _selectedTrack!['user']['name'],
+                artistName: _selectedTrack!['user'],
               ),
             ],
           ],

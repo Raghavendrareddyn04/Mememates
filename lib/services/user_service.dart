@@ -75,6 +75,7 @@ class UserService {
         canMessage: data['canMessage'] ?? false,
         profileImage: data['profileImage'],
         bio: data['bio'],
+        artwork: data['artwork'] as Map<String, dynamic>?,
       );
     } catch (e) {
       throw 'Failed to get user profile: $e';
@@ -118,6 +119,17 @@ class UserService {
     List<String>? interests,
   }) async {
     try {
+      // Verify the document exists first
+      final docRef = _firestore.collection('users').doc(userId);
+      final docSnapshot = await docRef.get();
+
+      if (!docSnapshot.exists) {
+        // Create the document if it doesn't exist
+        await docRef.set({
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       final Map<String, dynamic> updates = {};
 
       if (name != null) {
@@ -138,7 +150,7 @@ class UserService {
       if (preferredGender != null) updates['preferredGender'] = preferredGender;
       if (interests != null) updates['interests'] = interests;
 
-      await _firestore.collection('users').doc(userId).update(updates);
+      await docRef.update(updates);
     } catch (e) {
       throw 'Failed to update user profile: $e';
     }

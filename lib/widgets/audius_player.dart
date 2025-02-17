@@ -6,12 +6,14 @@ class AudiusPlayer extends StatefulWidget {
   final String trackId;
   final String title;
   final String artistName;
+  final String? artwork;
 
   const AudiusPlayer({
     super.key,
     required this.trackId,
     required this.title,
     required this.artistName,
+    this.artwork,
   });
 
   @override
@@ -110,19 +112,45 @@ class _AudiusPlayerState extends State<AudiusPlayer> {
         children: [
           Row(
             children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
+              if (widget.artwork != null && widget.artwork!.isNotEmpty)
+                ClipRRect(
                   borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    widget.artwork!,
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
+                          size: 30,
+                        ),
+                      );
+                    },
+                  ),
+                )
+              else
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.music_note,
+                    color: Colors.white54,
+                    size: 30,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.music_note,
-                  color: Colors.white54,
-                  size: 30,
-                ),
-              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(

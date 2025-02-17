@@ -156,4 +156,6 @@ class MemePost {
 
   @override
   int get hashCode => id.hashCode;
+
+  get trackArtwork => null;
 }

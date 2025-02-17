@@ -35,7 +35,7 @@ class NotificationService {
   }) async {
     try {
       final notification = {
-        'userId': userId, // This is the recipient's ID
+        'userId': userId,
         'title': title,
         'message': message,
         'type': type.index,
@@ -45,7 +45,7 @@ class NotificationService {
 
       await _firestore.collection('notifications').add(notification);
 
-      // Only add to local notifications if the notification is for the current user
+      // Add to local notifications if it's for the current user
       if (userId == _auth.currentUser?.uid) {
         final localNotification = AppNotification(
           type: type,
@@ -62,24 +62,28 @@ class NotificationService {
     }
   }
 
-  Future<void> handleVibeMatch(
-      String matchedUserId, String matchedUserName) async {
-    // Send notification to both users
-    await createNotification(
-      userId: matchedUserId,
-      title: 'New Vibe Match! 🎉',
-      message: 'You have a new match! Start chatting now!',
-      type: NotificationType.match,
-    );
-
-    final currentUser = _auth.currentUser;
-    if (currentUser != null) {
+  Future<void> handleVibeMatch(String userId, String matchedUserName) async {
+    try {
+      // Create notification for the matched user
       await createNotification(
-        userId: currentUser.uid,
+        userId: userId,
         title: 'New Vibe Match! 🎉',
-        message: 'You and $matchedUserName have matched! Start chatting now!',
+        message: 'You matched with $matchedUserName! Start chatting now!',
         type: NotificationType.match,
       );
+
+      // Create notification for the current user
+      final currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        await createNotification(
+          userId: currentUser.uid,
+          title: 'New Vibe Match! 🎉',
+          message: 'You matched with $matchedUserName! Start chatting now!',
+          type: NotificationType.match,
+        );
+      }
+    } catch (e) {
+      print('Error handling vibe match notification: $e');
     }
   }
 
@@ -88,16 +92,20 @@ class NotificationService {
     required String interactorName,
     required bool isLike,
   }) async {
-    // Only send notification to the meme owner
-    if (memeOwnerId != _auth.currentUser?.uid) {
-      await createNotification(
-        userId: memeOwnerId,
-        title: isLike ? 'New Like! ❤️' : 'New Comment! 💭',
-        message: isLike
-            ? '$interactorName liked your meme!'
-            : '$interactorName commented on your meme!',
-        type: NotificationType.activity,
-      );
+    try {
+      // Only notify if the interaction is not from the owner
+      if (memeOwnerId != _auth.currentUser?.uid) {
+        await createNotification(
+          userId: memeOwnerId,
+          title: isLike ? 'New Like! ❤️' : 'New Comment! 💭',
+          message: isLike
+              ? '$interactorName liked your meme!'
+              : '$interactorName commented on your meme!',
+          type: NotificationType.activity,
+        );
+      }
+    } catch (e) {
+      print('Error handling meme interaction notification: $e');
     }
   }
 
@@ -106,16 +114,20 @@ class NotificationService {
     required String interactorName,
     required bool isLike,
   }) async {
-    // Only send notification to the mood board owner
-    if (boardOwnerId != _auth.currentUser?.uid) {
-      await createNotification(
-        userId: boardOwnerId,
-        title: isLike ? 'Mood Board Like! 🎨' : 'Mood Board Comment! 💬',
-        message: isLike
-            ? '$interactorName liked your mood board!'
-            : '$interactorName commented on your mood board!',
-        type: NotificationType.activity,
-      );
+    try {
+      // Only notify if the interaction is not from the owner
+      if (boardOwnerId != _auth.currentUser?.uid) {
+        await createNotification(
+          userId: boardOwnerId,
+          title: isLike ? 'Mood Board Like! 🎨' : 'Mood Board Comment! 💬',
+          message: isLike
+              ? '$interactorName liked your mood board!'
+              : '$interactorName commented on your mood board!',
+          type: NotificationType.activity,
+        );
+      }
+    } catch (e) {
+      print('Error handling mood board interaction notification: $e');
     }
   }
 

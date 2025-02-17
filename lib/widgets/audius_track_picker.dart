@@ -29,7 +29,7 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
     setState(() => _isLoading = true);
 
     try {
-      final tracks = await _audiusService.getTrackList();
+      final tracks = await _audiusService.getTrendingTracks();
       setState(() {
         _tracks = tracks;
         _isLoading = false;
@@ -108,7 +108,7 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
                   ),
             contentPadding: const EdgeInsets.all(16),
             title: Text(
-              track['title'],
+              track['title'] ?? 'Unknown Title',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -119,7 +119,7 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  track['artist'],
+                  track['artist'] ?? 'Unknown Artist',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
                     fontSize: 14,
@@ -141,10 +141,15 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
               size: 32,
             ),
             onTap: () {
-              widget.onTrackSelected(track);
+              final selectedTrack = {
+                'id': track['id'],
+                'title': track['title'] ?? 'Unknown Title',
+                'user': track['artist'] ?? 'Unknown Artist',
+              };
+              widget.onTrackSelected(selectedTrack);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Selected: ${track['title']}'),
+                  content: Text('Selected: ${selectedTrack['title']}'),
                   duration: const Duration(seconds: 2),
                 ),
               );

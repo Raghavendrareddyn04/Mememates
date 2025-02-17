@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_auth/models/user_profile.dart';
 import 'package:flutter_auth/services/notification_service.dart';
@@ -121,30 +120,38 @@ class MemeService {
     String? preferredGender,
   }) {
     return _firestore
-        .collection('memes')
-        .orderBy('createdAt', descending: true)
+        .collection('users')
+        .doc(userId)
         .snapshots()
-        .asyncMap((snapshot) async {
-      final memes = <MemePost>[];
+        .asyncMap((userDoc) async {
+      if (!userDoc.exists) return [];
 
-      // Get user's liked and passed memes
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      // Get user's liked and passed memes from their document
       final likedMemeIds =
           List<String>.from(userDoc.data()?['likedMemes'] ?? []);
       final passedMemeIds =
           List<String>.from(userDoc.data()?['passedMemes'] ?? []);
 
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final postUserId = data['userId'] as String;
+      // Query memes excluding user's own memes and liked/passed memes
+      final memesQuery = await _firestore
+          .collection('memes')
+          .where('userId', isNotEqualTo: userId)
+          .orderBy('userId')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      final memes = <MemePost>[];
+
+      for (var doc in memesQuery.docs) {
         final memeId = doc.id;
 
-        // Skip if this is user's own meme or already liked/passed
-        if (postUserId == userId ||
-            likedMemeIds.contains(memeId) ||
-            passedMemeIds.contains(memeId)) {
+        // Skip if already liked or passed
+        if (likedMemeIds.contains(memeId) || passedMemeIds.contains(memeId)) {
           continue;
         }
+
+        final data = doc.data();
+        final postUserId = data['userId'] as String;
 
         // Get poster's profile for filtering
         final posterDoc =
@@ -198,6 +205,15 @@ class MemeService {
       final memeRef = _firestore.collection('memes').doc(memeId);
       final userRef = _firestore.collection('users').doc(userId);
 
+      // Get meme data first
+      final memeDoc = await memeRef.get();
+      final memeData = memeDoc.data();
+      final memeOwnerId = memeData?['userId'] as String?;
+
+      if (memeOwnerId == null) {
+        throw 'Meme owner not found';
+      }
+
       batch.update(memeRef, {
         'likedByUsers': FieldValue.arrayUnion([userId]),
       });
@@ -207,7 +223,9 @@ class MemeService {
       });
 
       await batch.commit();
-      await _handleLikeBackground(memeId, userId);
+
+      // Handle notifications and chat creation after successful like
+      await _handleLikeBackground(memeId, userId, memeOwnerId);
     } catch (e) {
       throw 'Failed to like meme: $e';
     }
@@ -417,44 +435,40 @@ class MemeService {
   }
 
   // Background processing for like
-  Future<void> _handleLikeBackground(String memeId, String userId) async {
+  Future<void> _handleLikeBackground(
+      String memeId, String userId, String memeOwnerId) async {
     try {
-      final memeDoc = await _firestore.collection('memes').doc(memeId).get();
-      final memeData = memeDoc.data();
+      // Get current user's name
+      final currentUserDoc =
+          await _firestore.collection('users').doc(userId).get();
+      final currentUserName = currentUserDoc.data()?['name'] ?? 'Someone';
 
-      if (memeData != null) {
-        final memeOwnerId = memeData['userId'] as String;
-        final currentUserDoc =
-            await _firestore.collection('users').doc(userId).get();
-        final currentUserName = currentUserDoc.data()?['name'] ?? 'Someone';
+      // Create chat entry
+      await _chatService.createChatOnMemeLike(memeId, userId, memeOwnerId);
 
-        // Create chat entry
-        await _chatService.createChatOnMemeLike(memeId, userId, memeOwnerId);
+      // Send notification for meme like
+      await _notificationService.handleMemeInteraction(
+        memeOwnerId: memeOwnerId,
+        interactorName: currentUserName,
+        isLike: true,
+      );
 
-        // Send notification for meme like
-        await _notificationService.handleMemeInteraction(
-          memeOwnerId: memeOwnerId,
-          interactorName: currentUserName,
-          isLike: true,
-        );
+      // Check for mutual like
+      final hasOtherUserLikedMyMeme =
+          await hasUserLikedMyMeme(userId, memeOwnerId);
+      if (hasOtherUserLikedMyMeme) {
+        // Enable messaging
+        await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
 
-        // Check for mutual like
-        final hasOtherUserLikedMyMeme =
-            await hasUserLikedMyMeme(userId, memeOwnerId);
-        if (hasOtherUserLikedMyMeme) {
-          // Enable messaging
-          await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
+        // Get other user's name
+        final ownerDoc =
+            await _firestore.collection('users').doc(memeOwnerId).get();
+        final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
 
-          // Send vibe match notification
-          final ownerDoc =
-              await _firestore.collection('users').doc(memeOwnerId).get();
-          final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
-
-          // Notify both users about the match
-          await _notificationService.handleVibeMatch(
-              memeOwnerId, currentUserName);
-          await _notificationService.handleVibeMatch(userId, ownerName);
-        }
+        // Send vibe match notifications to both users
+        await _notificationService.handleVibeMatch(
+            memeOwnerId, currentUserName);
+        await _notificationService.handleVibeMatch(userId, ownerName);
       }
     } catch (e) {
       print('Background like processing error: $e');

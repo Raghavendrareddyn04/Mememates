@@ -761,6 +761,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               trackId: _userProfile!['audiusTrackId'],
               title: _userProfile!['trackTitle'] ?? '',
               artistName: _userProfile!['artistName'] ?? '',
+              artwork: _userProfile!['artwork'],
             )
           else
             Container(

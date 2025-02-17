@@ -30,7 +30,6 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
   bool _isLoading = true;
   bool _isLiked = false;
   bool _isPassed = false;
-  final _commentController = TextEditingController();
 
   late AnimationController _animationController;
 
@@ -60,7 +59,17 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
             await _memeService.getUserStreakInfo(widget.meme.userId);
 
         setState(() {
-          _posterProfile = profile as Map<String, dynamic>?;
+          _posterProfile = {
+            'name': profile?.name,
+            'age': profile?.age,
+            'bio': profile?.bio,
+            'profileImage': profile?.profileImage,
+            'moodBoardImages': profile?.moodBoard,
+            'audiusTrackId': profile?.audiusTrackId,
+            'trackTitle': profile?.trackTitle,
+            'artistName': profile?.artistName,
+            'interests': profile?.interests ?? [],
+          };
           _streakInfo = streakInfo;
           _isLiked = widget.meme.isLikedBy(currentUser.uid);
           _isPassed = widget.meme.isPassedBy(currentUser.uid);
@@ -82,6 +91,75 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
         );
       }
     }
+  }
+
+  Widget _buildMusicAnthemSection() {
+    final hasMusic = _posterProfile != null &&
+        _posterProfile!['audiusTrackId'] != null &&
+        _posterProfile!['trackTitle'] != null &&
+        _posterProfile!['artistName'] != null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: hasMusic
+                      ? Colors.pink.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.music_note,
+                  color: hasMusic ? Colors.pink : Colors.grey,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Music Anthem',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (hasMusic)
+            AudiusPlayer(
+              trackId: _posterProfile!['audiusTrackId'],
+              title: _posterProfile!['trackTitle'],
+              artistName: _posterProfile!['artistName'],
+              artwork: widget.meme.trackArtwork,
+            )
+          else
+            Center(
+              child: Text(
+                'No music anthem set',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleLike() async {
@@ -308,51 +386,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
                 children: [
                   _buildMemeSection(true),
                   const SizedBox(height: 32),
-                  if (widget.meme.audiusTrackId != null) ...[
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.pink.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.music_note,
-                            color: Colors.pink,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Anthem',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                '${widget.meme.trackTitle ?? ''} - ${widget.meme.artistName ?? ''}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _buildCommentSection(true),
+                  _buildMusicAnthemSection(),
                 ],
               ),
             ),
@@ -389,19 +423,11 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
           children: [
             _buildMemeSection(isSmallScreen),
             const SizedBox(height: 24),
-            if (widget.meme.audiusTrackId != null) ...[
-              AudiusPlayer(
-                trackId: widget.meme.audiusTrackId!,
-                title: widget.meme.trackTitle ?? '',
-                artistName: widget.meme.artistName ?? '',
-              ),
-              const SizedBox(height: 32),
-            ],
+            _buildMusicAnthemSection(),
+            const SizedBox(height: 24),
             _buildUserProfile(isSmallScreen),
             const SizedBox(height: 24),
             _buildUserStats(isSmallScreen),
-            const SizedBox(height: 24),
-            _buildCommentSection(isSmallScreen),
             const SizedBox(height: 24),
             if (_userMemes != null && _userMemes!.isNotEmpty)
               _buildMoreMemes(isSmallScreen),
@@ -732,62 +758,6 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
     );
   }
 
-  Widget _buildCommentSection(bool isWideScreen) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Comments',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isWideScreen ? 20 : 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle:
-                          TextStyle(color: Colors.white.withOpacity(0.5)),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.pink),
-                  onPressed: () {
-                    // Implement comment submission
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMoreMemes(bool isWideScreen) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -902,7 +872,6 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
 
   @override
   void dispose() {
-    _commentController.dispose();
     _animationController.dispose();
     super.dispose();
   }

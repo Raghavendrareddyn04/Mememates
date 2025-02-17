@@ -10,6 +10,7 @@ class UserProfile {
   final bool canMessage;
   final String? profileImage;
   final String? bio;
+  final Map<String, dynamic>? artwork;
 
   UserProfile({
     required this.userId,
@@ -23,6 +24,7 @@ class UserProfile {
     required this.canMessage,
     this.profileImage,
     this.bio,
+    this.artwork,
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
@@ -38,6 +40,7 @@ class UserProfile {
       canMessage: map['canMessage'] as bool? ?? false,
       profileImage: map['profileImage'] as String?,
       bio: map['bio'] as String?,
+      artwork: map['artwork'] as Map<String, dynamic>?,
     );
   }
 
