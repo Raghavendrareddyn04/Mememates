@@ -2,6 +2,8 @@ class UserProfile {
   final String userId;
   final String name;
   final int age;
+  final String gender;
+  final String preferredGender;
   final List<String> moodBoard;
   final String? audiusTrackId;
   final String? trackTitle;
@@ -16,6 +18,8 @@ class UserProfile {
     required this.userId,
     required this.name,
     required this.age,
+    required this.gender,
+    required this.preferredGender,
     required this.moodBoard,
     this.audiusTrackId,
     this.trackTitle,
@@ -32,6 +36,8 @@ class UserProfile {
       userId: map['userId'] as String,
       name: map['name'] as String? ?? '',
       age: map['age'] as int? ?? 0,
+      gender: map['gender'] as String? ?? '',
+      preferredGender: map['preferredGender'] as String? ?? '',
       moodBoard: List<String>.from(map['moodBoardImages'] ?? []),
       audiusTrackId: map['audiusTrackId'] as String?,
       trackTitle: map['trackTitle'] as String?,
@@ -51,6 +57,8 @@ class UserProfile {
       'userId': userId,
       'name': name,
       'age': age,
+      'gender': gender,
+      'preferredGender': preferredGender,
       'moodBoardImages': moodBoard,
       'audiusTrackId': audiusTrackId,
       'trackTitle': trackTitle,

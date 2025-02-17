@@ -493,6 +493,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       moodBoard: [],
       artistName: meme.artistName ?? '',
       trackTitle: meme.videoTitle ?? '',
+      gender: 'Not specified',
+      preferredGender: _preferredGender ?? 'All',
       hasLikedMe: true,
       canMessage: true,
       profileImage: meme.userProfileImage,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import 'dart:ui';
 import '../models/meme_post.dart';
 import '../services/user_service.dart';
@@ -235,6 +236,8 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
       hasLikedMe: true,
       canMessage: true,
       profileImage: widget.meme.userProfileImage,
+      gender: _posterProfile!['gender'] ?? 'Not specified',
+      preferredGender: _posterProfile!['preferredGender'] ?? 'Not specified',
     );
 
     Navigator.push(
@@ -346,28 +349,8 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
         ),
       ),
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.pink),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Loading meme details...',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 16,
-              ),
-            ),
-          ],
+        child: LoadingAnimation(
+          message: "Loading details...",
         ),
       ),
     );

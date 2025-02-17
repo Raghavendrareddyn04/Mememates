@@ -121,10 +121,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
           List<String>.from(widget.initialProfile!['moodBoardImages'] ?? []);
       _profileImageUrl = widget.initialProfile!['profileImage'];
       _age = widget.initialProfile!['age'];
-      _gender = widget.initialProfile!['gender'];
+
+      // Set _gender only if it matches one of the available options, otherwise default to the first option.
+      final savedGender = widget.initialProfile!['gender'];
+      _gender = _genderOptions.contains(savedGender)
+          ? savedGender
+          : _genderOptions.first;
 
       final preferredGender = widget.initialProfile!['preferredGender'];
-      _preferredGender = preferredGender == 'Both' ? 'All' : preferredGender;
+      _preferredGender = (preferredGender == 'Both' || preferredGender == '')
+          ? 'All'
+          : preferredGender;
 
       _interests = List<String>.from(widget.initialProfile!['interests'] ?? []);
       _artistName = widget.initialProfile!['artistName'];
@@ -627,7 +634,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
                   selectedColor: Colors.pink,
                   checkmarkColor: Colors.white,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white70,
+                    color: isSelected ? Colors.white : Colors.black,
                     fontWeight:
                         isSelected ? FontWeight.bold : FontWeight.normal,
                   ),

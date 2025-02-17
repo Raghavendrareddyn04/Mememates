@@ -22,7 +22,10 @@ class UserService {
     String? bio,
   }) async {
     try {
-      await _firestore.collection('users').doc(userId).set({
+      print(
+          'Creating user profile with gender: $gender, preferredGender: $preferredGender');
+
+      final userData = {
         'name': name,
         'age': age,
         'gender': gender,
@@ -45,7 +48,10 @@ class UserService {
           'maxDistance': 50,
           'selectedCategories': ['Funny', 'Music'],
         },
-      });
+      };
+
+      print('Saving user data to Firestore: $userData');
+      await _firestore.collection('users').doc(userId).set(userData);
 
       // Update Auth profile
       if (profileImage != null) {
@@ -53,6 +59,7 @@ class UserService {
       }
       await _auth.currentUser?.updateDisplayName(name);
     } catch (e) {
+      print('Error creating user profile: $e');
       throw 'Failed to create user profile: $e';
     }
   }
@@ -63,10 +70,14 @@ class UserService {
       if (!doc.exists) return null;
 
       final data = doc.data()!;
-      return UserProfile(
+      print('Retrieved user data from Firestore: $data');
+
+      final profile = UserProfile(
         userId: userId,
         name: data['name'] ?? '',
         age: data['age'] ?? 0,
+        gender: data['gender'] ?? '',
+        preferredGender: data['preferredGender'] ?? '',
         moodBoard: List<String>.from(data['moodBoardImages'] ?? []),
         audiusTrackId: data['audiusTrackId'],
         trackTitle: data['trackTitle'],
@@ -77,7 +88,11 @@ class UserService {
         bio: data['bio'],
         artwork: data['artwork'] as Map<String, dynamic>?,
       );
+
+      print('Created UserProfile object: ${profile.toMap()}');
+      return profile;
     } catch (e) {
+      print('Error getting user profile: $e');
       throw 'Failed to get user profile: $e';
     }
   }
@@ -195,6 +210,8 @@ class UserService {
           userId: doc.id,
           name: data['name'] ?? '',
           age: data['age'] ?? 0,
+          gender: data['gender'] ?? '',
+          preferredGender: data['preferredGender'] ?? '',
           moodBoard: List<String>.from(data['moodBoardImages'] ?? []),
           audiusTrackId: data['audiusTrackId'],
           trackTitle: data['trackTitle'],

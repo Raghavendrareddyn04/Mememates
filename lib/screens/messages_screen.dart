@@ -545,6 +545,8 @@ class _MessagesScreenState extends State<MessagesScreen>
               audiusTrackId: userProfile.audiusTrackId,
               trackTitle: userProfile.trackTitle,
               artistName: userProfile.artistName,
+              gender: userProfile.gender,
+              preferredGender: userProfile.preferredGender,
               hasLikedMe: true,
               canMessage: true,
               profileImage: userProfile.profileImage,

@@ -421,6 +421,8 @@ class MemeService {
             moodBoard: List<String>.from(data['moodBoardImages'] ?? []),
             artistName: data['artistName'] ?? '',
             trackTitle: data['songTitle'] ?? '',
+            gender: data['gender'] ?? '',
+            preferredGender: data['preferredGender'] ?? '',
             hasLikedMe: true,
             canMessage: true,
             profileImage: data['profileImage'],
