@@ -9,6 +9,9 @@ class MemePost {
   final String? videoId;
   final String? videoTitle;
   final String? artistName;
+  final String? audiusTrackId;
+  final String? trackTitle;
+  final Map<String, dynamic>? artwork;
   final DateTime createdAt;
   List<String> likedByUsers;
   List<String> passedByUsers;
@@ -25,6 +28,9 @@ class MemePost {
     this.videoId,
     this.videoTitle,
     this.artistName,
+    this.audiusTrackId,
+    this.trackTitle,
+    this.artwork,
     required this.createdAt,
     List<String>? likedByUsers,
     List<String>? passedByUsers,
@@ -101,6 +107,46 @@ class MemePost {
 
   void resetRevertState() {
     _isReverted = false;
+  }
+
+  factory MemePost.fromMap(Map<String, dynamic> map) {
+    return MemePost(
+      id: map['id'] ?? '',
+      userId: map['userId'] ?? '',
+      userName: map['userName'] ?? '',
+      memeUrl: map['memeUrl'] ?? '',
+      caption: map['caption'] ?? '',
+      videoId: map['videoId'],
+      videoTitle: map['videoTitle'],
+      artistName: map['artistName'],
+      audiusTrackId: map['audiusTrackId'],
+      trackTitle: map['trackTitle'],
+      artwork: map['artwork'],
+      createdAt: map['createdAt']?.toDate() ?? DateTime.now(),
+      likedByUsers: List<String>.from(map['likedByUsers'] ?? []),
+      passedByUsers: List<String>.from(map['passedByUsers'] ?? []),
+      userProfileImage: map['userProfileImage'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'userId': userId,
+      'userName': userName,
+      'memeUrl': memeUrl,
+      'caption': caption,
+      'videoId': videoId,
+      'videoTitle': videoTitle,
+      'artistName': artistName,
+      'audiusTrackId': audiusTrackId,
+      'trackTitle': trackTitle,
+      'artwork': artwork,
+      'createdAt': createdAt,
+      'likedByUsers': likedByUsers,
+      'passedByUsers': passedByUsers,
+      'userProfileImage': userProfileImage,
+    };
   }
 
   @override

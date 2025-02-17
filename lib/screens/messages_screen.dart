@@ -134,14 +134,16 @@ class _MessagesScreenState extends State<MessagesScreen>
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.purple.shade800.withOpacity(0.8),
-                Colors.pink.shade400.withOpacity(0.8),
+                Colors.pink.shade900,
+                Colors.purple.shade900,
+                Colors.deepPurple.shade900,
               ],
             ),
           ),
@@ -339,7 +341,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
                           colors: [
-                            Colors.pink.shade400,
+                            Colors.white10.withOpacity(0.2),
                             Colors.purple.shade400,
                           ],
                         ),
@@ -529,7 +531,6 @@ class _MessagesScreenState extends State<MessagesScreen>
         );
       }
     }
-
     final userProfile = await _userService.getUserProfile(chat.otherUserId);
     if (userProfile != null && mounted) {
       Navigator.push(
@@ -538,16 +539,16 @@ class _MessagesScreenState extends State<MessagesScreen>
           builder: (context) => ChatScreen(
             profile: UserProfile(
               userId: chat.otherUserId,
-              name: userProfile['name'] ?? '',
-              age: userProfile['age'] ?? 0,
-              moodBoard:
-                  List<String>.from(userProfile['moodBoardImages'] ?? []),
-              anthem: userProfile['anthem'] ?? '',
-              artistName: userProfile['artistName'] ?? '',
-              videoTitle: userProfile['songTitle'] ?? '',
+              name: userProfile.name,
+              age: userProfile.age,
+              moodBoard: userProfile.moodBoard,
+              audiusTrackId: userProfile.audiusTrackId,
+              trackTitle: userProfile.trackTitle,
+              artistName: userProfile.artistName,
               hasLikedMe: true,
               canMessage: true,
-              profileImage: userProfile['profileImage'],
+              profileImage: userProfile.profileImage,
+              bio: userProfile.bio,
             ),
           ),
         ),

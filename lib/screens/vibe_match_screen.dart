@@ -469,7 +469,9 @@ class _VibeMatchScreenState extends State<VibeMatchScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (match.anthem.isNotEmpty) ...[
+                          if (match.audiusTrackId != null &&
+                              match.trackTitle != null &&
+                              match.artistName != null) ...[
                             Row(
                               children: [
                                 Container(
@@ -498,7 +500,7 @@ class _VibeMatchScreenState extends State<VibeMatchScreen>
                                         ),
                                       ),
                                       Text(
-                                        match.anthem,
+                                        '${match.trackTitle} - ${match.artistName}',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 14,
@@ -626,7 +628,9 @@ class _VibeMatchScreenState extends State<VibeMatchScreen>
                             fontSize: 14,
                           ),
                         ),
-                        if (match.anthem.isNotEmpty) ...[
+                        if (match.audiusTrackId != null &&
+                            match.trackTitle != null &&
+                            match.artistName != null) ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
@@ -638,7 +642,7 @@ class _VibeMatchScreenState extends State<VibeMatchScreen>
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  match.anthem,
+                                  '${match.trackTitle} - ${match.artistName}',
                                   style: TextStyle(
                                     color: Colors.white.withOpacity(0.7),
                                     fontSize: 12,
@@ -705,7 +709,7 @@ class _VibeMatchScreenState extends State<VibeMatchScreen>
           _buildStatItem(
             icon: Icons.music_note,
             label: 'Music Matches',
-            value: _matches.where((m) => m.anthem.isNotEmpty).length,
+            value: _matches.where((m) => m.audiusTrackId != null).length,
             color: Colors.green,
           ),
           const SizedBox(height: 16),

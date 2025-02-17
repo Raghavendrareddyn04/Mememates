@@ -12,7 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.0.17
   shared_preferences: ^2.5.2
-  just_audio: ^0.9.46
+  just_audio: ^0.9.46 
   just_audio_web: ^0.4.14
   audio_session: ^0.1.25
   country_code_picker: ^3.2.0
@@ -37,8 +37,6 @@ dependencies:
   url_launcher: ^6.3.1
   audio_video_progress_bar: ^2.0.3
   image: 4.3.0
-  youtube_explode_dart: ^2.3.9
-  youtube_player_flutter: ^9.1.1
   flutter_animate: ^4.5.2
   rive: ^0.13.20
   shimmer: ^3.0.0

@@ -35,7 +35,7 @@ class NotificationService {
   }) async {
     try {
       final notification = {
-        'userId': userId,
+        'userId': userId, // This is the recipient's ID
         'title': title,
         'message': message,
         'type': type.index,
@@ -45,15 +45,18 @@ class NotificationService {
 
       await _firestore.collection('notifications').add(notification);
 
-      final localNotification = AppNotification(
-        type: type,
-        title: title,
-        message: message,
-        timestamp: DateTime.now(),
-      );
+      // Only add to local notifications if the notification is for the current user
+      if (userId == _auth.currentUser?.uid) {
+        final localNotification = AppNotification(
+          type: type,
+          title: title,
+          message: message,
+          timestamp: DateTime.now(),
+        );
 
-      _notifications.insert(0, localNotification);
-      _notifyListeners();
+        _notifications.insert(0, localNotification);
+        _notifyListeners();
+      }
     } catch (e) {
       print('Error creating notification: $e');
     }
@@ -61,15 +64,23 @@ class NotificationService {
 
   Future<void> handleVibeMatch(
       String matchedUserId, String matchedUserName) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-
+    // Send notification to both users
     await createNotification(
-      userId: currentUser.uid,
+      userId: matchedUserId,
       title: 'New Vibe Match! 🎉',
-      message: 'You and $matchedUserName have matched! Start chatting now!',
+      message: 'You have a new match! Start chatting now!',
       type: NotificationType.match,
     );
+
+    final currentUser = _auth.currentUser;
+    if (currentUser != null) {
+      await createNotification(
+        userId: currentUser.uid,
+        title: 'New Vibe Match! 🎉',
+        message: 'You and $matchedUserName have matched! Start chatting now!',
+        type: NotificationType.match,
+      );
+    }
   }
 
   Future<void> handleMemeInteraction({
@@ -77,14 +88,17 @@ class NotificationService {
     required String interactorName,
     required bool isLike,
   }) async {
-    await createNotification(
-      userId: memeOwnerId,
-      title: isLike ? 'New Like! ❤️' : 'New Comment! 💭',
-      message: isLike
-          ? '$interactorName liked your meme!'
-          : '$interactorName commented on your meme!',
-      type: NotificationType.activity,
-    );
+    // Only send notification to the meme owner
+    if (memeOwnerId != _auth.currentUser?.uid) {
+      await createNotification(
+        userId: memeOwnerId,
+        title: isLike ? 'New Like! ❤️' : 'New Comment! 💭',
+        message: isLike
+            ? '$interactorName liked your meme!'
+            : '$interactorName commented on your meme!',
+        type: NotificationType.activity,
+      );
+    }
   }
 
   Future<void> handleMoodBoardInteraction({
@@ -92,14 +106,17 @@ class NotificationService {
     required String interactorName,
     required bool isLike,
   }) async {
-    await createNotification(
-      userId: boardOwnerId,
-      title: isLike ? 'Mood Board Like! 🎨' : 'Mood Board Comment! 💬',
-      message: isLike
-          ? '$interactorName liked your mood board!'
-          : '$interactorName commented on your mood board!',
-      type: NotificationType.activity,
-    );
+    // Only send notification to the mood board owner
+    if (boardOwnerId != _auth.currentUser?.uid) {
+      await createNotification(
+        userId: boardOwnerId,
+        title: isLike ? 'Mood Board Like! 🎨' : 'Mood Board Comment! 💬',
+        message: isLike
+            ? '$interactorName liked your mood board!'
+            : '$interactorName commented on your mood board!',
+        type: NotificationType.activity,
+      );
+    }
   }
 
   Stream<List<AppNotification>> getNotificationsStream(String userId) {

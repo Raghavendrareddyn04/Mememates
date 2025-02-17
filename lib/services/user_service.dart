@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/user_profile.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -14,10 +15,11 @@ class UserService {
     required String gender,
     required String preferredGender,
     required List<String> moodBoardImages,
-    String? anthem,
+    String? audiusTrackId,
+    String? trackTitle,
     String? artistName,
-    String? videoTitle,
     String? profileImage,
+    String? bio,
   }) async {
     try {
       await _firestore.collection('users').doc(userId).set({
@@ -26,10 +28,11 @@ class UserService {
         'gender': gender,
         'preferredGender': preferredGender,
         'moodBoardImages': moodBoardImages,
-        'anthem': anthem,
+        'audiusTrackId': audiusTrackId,
+        'trackTitle': trackTitle,
         'artistName': artistName,
-        'videoTitle': videoTitle,
         'profileImage': profileImage,
+        'bio': bio,
         'createdAt': FieldValue.serverTimestamp(),
         'settings': {
           'autoplayMusic': true,
@@ -54,10 +57,25 @@ class UserService {
     }
   }
 
-  Future<Map<String, dynamic>?> getUserProfile(String userId) async {
+  Future<UserProfile?> getUserProfile(String userId) async {
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
-      return doc.data();
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
+      return UserProfile(
+        userId: userId,
+        name: data['name'] ?? '',
+        age: data['age'] ?? 0,
+        moodBoard: List<String>.from(data['moodBoardImages'] ?? []),
+        audiusTrackId: data['audiusTrackId'],
+        trackTitle: data['trackTitle'],
+        artistName: data['artistName'],
+        hasLikedMe: data['hasLikedMe'] ?? false,
+        canMessage: data['canMessage'] ?? false,
+        profileImage: data['profileImage'],
+        bio: data['bio'],
+      );
     } catch (e) {
       throw 'Failed to get user profile: $e';
     }
@@ -90,14 +108,14 @@ class UserService {
     String? name,
     String? bio,
     List<String>? moodBoardImages,
-    String? anthem,
+    String? audiusTrackId,
     String? profileImage,
     int? age,
     String? gender,
     String? preferredGender,
-    String? videoTitle,
+    String? trackTitle,
     String? artistName,
-    required List<String> interests,
+    List<String>? interests,
   }) async {
     try {
       final Map<String, dynamic> updates = {};
@@ -108,8 +126,8 @@ class UserService {
       }
       if (bio != null) updates['bio'] = bio;
       if (moodBoardImages != null) updates['moodBoardImages'] = moodBoardImages;
-      if (anthem != null) updates['anthem'] = anthem;
-      if (videoTitle != null) updates['videoTitle'] = videoTitle;
+      if (audiusTrackId != null) updates['audiusTrackId'] = audiusTrackId;
+      if (trackTitle != null) updates['trackTitle'] = trackTitle;
       if (artistName != null) updates['artistName'] = artistName;
       if (profileImage != null) {
         updates['profileImage'] = profileImage;
@@ -118,6 +136,7 @@ class UserService {
       if (age != null) updates['age'] = age;
       if (gender != null) updates['gender'] = gender;
       if (preferredGender != null) updates['preferredGender'] = preferredGender;
+      if (interests != null) updates['interests'] = interests;
 
       await _firestore.collection('users').doc(userId).update(updates);
     } catch (e) {
@@ -145,5 +164,35 @@ class UserService {
     } catch (e) {
       throw 'Failed to deactivate account: $e';
     }
+  }
+
+  Stream<List<UserProfile>> getMatchedUsers() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('users')
+        .where('userId', isNotEqualTo: currentUser.uid)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return UserProfile(
+          userId: doc.id,
+          name: data['name'] ?? '',
+          age: data['age'] ?? 0,
+          moodBoard: List<String>.from(data['moodBoardImages'] ?? []),
+          audiusTrackId: data['audiusTrackId'],
+          trackTitle: data['trackTitle'],
+          artistName: data['artistName'],
+          hasLikedMe: data['hasLikedMe'] ?? false,
+          canMessage: data['canMessage'] ?? false,
+          profileImage: data['profileImage'],
+          bio: data['bio'],
+        );
+      }).toList();
+    });
   }
 }

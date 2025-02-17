@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/widgets/audius_player.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
 import 'dart:async';
 import '../models/user_profile.dart';
@@ -7,7 +8,6 @@ import '../services/meme_service.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import 'meme_detail_screen.dart';
-import '../widgets/youtube_player.dart';
 
 class ChatScreen extends StatefulWidget {
   final UserProfile profile;
@@ -652,13 +652,11 @@ class _ChatScreenState extends State<ChatScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          if (widget.profile.anthem.isNotEmpty)
-            YouTubePlayer(
-              videoId: widget.profile.anthem,
-              title: widget.profile.videoTitle,
-              author: widget.profile.artistName,
-              thumbnailUrl: '', // This will be fetched from the video details
-              audioStreamUrl: '', // This will be fetched from the video details
+          if (widget.profile.audiusTrackId != null)
+            AudiusPlayer(
+              trackId: widget.profile.audiusTrackId!,
+              title: widget.profile.trackTitle ?? '',
+              artistName: widget.profile.artistName ?? '',
             ),
           const SizedBox(height: 16),
           const Text(

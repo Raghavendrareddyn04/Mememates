@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
 import 'package:flutter_auth/services/meme_service.dart';
 import 'package:flutter_auth/services/user_service.dart';
+import 'package:flutter_auth/widgets/audius_player.dart';
+import 'package:flutter_auth/widgets/audius_track_picker.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
-import '../widgets/youtube_track_picker.dart';
 import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
 import 'mood_board_editor_screen.dart';
-import '../widgets/youtube_player.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -79,9 +79,21 @@ class _ProfileScreenState extends State<ProfileScreen>
       final currentUser = _userService.currentUser;
       if (currentUser != null) {
         final profile = await _userService.getUserProfile(currentUser.uid);
-        setState(() {
-          _userProfile = profile;
-        });
+        if (profile != null) {
+          setState(() {
+            _userProfile = {
+              'name': profile.name,
+              'age': profile.age,
+              'bio': profile.bio,
+              'profileImage': profile.profileImage,
+              'moodBoardImages': profile.moodBoard,
+              'audiusTrackId': profile.audiusTrackId,
+              'trackTitle': profile.trackTitle,
+              'artistName': profile.artistName,
+              'interests': profile.interests ?? [],
+            };
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -166,7 +178,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showYouTubeTrackPicker() {
+  void _showAudiusTrackPicker() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -190,22 +202,30 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: YouTubeTrackPicker(
+              child: AudiusTrackPicker(
                 onTrackSelected: (track) async {
-                  final currentUser = _userService.currentUser;
-                  if (currentUser != null) {
-                    await _userService.updateUserProfile(
-                      userId: currentUser.uid,
-                      anthem: track.id,
-                      artistName: track.author,
-                      videoTitle: track.title,
-                      interests:
-                          List<String>.from(_userProfile?['interests'] ?? []),
-                    );
-                    await _loadUserProfile();
-                  }
-                  if (mounted) {
-                    Navigator.pop(context);
+                  try {
+                    final currentUser = _userService.currentUser;
+                    if (currentUser != null) {
+                      await _userService.updateUserProfile(
+                        userId: currentUser.uid,
+                        audiusTrackId: track['id'],
+                        trackTitle: track['title'],
+                        artistName: track['user'],
+                        interests:
+                            List<String>.from(_userProfile?['interests'] ?? []),
+                      );
+                      await _loadUserProfile();
+                    }
+                    if (mounted) {
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating anthem: $e')),
+                      );
+                    }
                   }
                 },
               ),
@@ -219,10 +239,23 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: LoadingAnimation(
-            message: "Loading your profile...",
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.pink.shade900,
+                Colors.purple.shade900,
+                Colors.deepPurple.shade900,
+              ],
+            ),
+          ),
+          child: const Center(
+            child: LoadingAnimation(
+              message: "Loading your profile...",
+            ),
           ),
         ),
       );
@@ -323,11 +356,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     return CustomScrollView(
       slivers: [
         SliverAppBar(
+          automaticallyImplyLeading: false,
           expandedHeight: 0,
           floating: true,
           pinned: true,
-          backgroundColor: Colors.transparent,
           elevation: 0,
+          backgroundColor: Colors.transparent,
           actions: [
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.white),
@@ -686,7 +720,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildMusicSection() {
-    final hasAnthem = _userProfile?['anthem'] != null;
+    final hasAnthem = _userProfile?['audiusTrackId'] != null;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -712,7 +746,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
               TextButton.icon(
-                onPressed: _showYouTubeTrackPicker,
+                onPressed: _showAudiusTrackPicker,
                 icon: const Icon(Icons.edit, color: Colors.pink),
                 label: Text(
                   hasAnthem ? 'Change Song' : 'Add Song',
@@ -723,12 +757,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const SizedBox(height: 16),
           if (hasAnthem)
-            YouTubePlayer(
-              videoId: _userProfile!['anthem'],
-              title: _userProfile!['videoTitle'] ?? '',
-              author: _userProfile!['artistName'] ?? '',
-              thumbnailUrl: '',
-              audioStreamUrl: '',
+            AudiusPlayer(
+              trackId: _userProfile!['audiusTrackId'],
+              title: _userProfile!['trackTitle'] ?? '',
+              artistName: _userProfile!['artistName'] ?? '',
             )
           else
             Container(

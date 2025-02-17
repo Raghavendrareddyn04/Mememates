@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import 'dart:ui';
@@ -267,13 +268,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              'Loading your preferences...',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 16,
+            const Center(
+              child: LoadingAnimation(
+                message: "Loading your preferences...",
               ),
-            ),
+            )
           ],
         ),
       ),
@@ -939,16 +938,34 @@ class _SettingsScreenState extends State<SettingsScreen>
               try {
                 final currentUser = _authService.currentUser;
                 if (currentUser != null) {
+                  // First close the dialog
+                  Navigator.pop(context);
+                  // Show loading state
+                  setState(() => _isLoading = true);
+                  // Deactivate account
                   await _userService.deactivateAccount(currentUser.uid);
+                  // Sign out
                   await _authService.signOut();
                   if (!mounted) return;
-                  Navigator.pushReplacementNamed(context, '/login');
+                  // Navigate to login and remove all previous routes
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                    (route) => false,
+                  );
                 }
               } catch (e) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error deactivating account: $e')),
+                  SnackBar(
+                    content: Text('Error deactivating account: $e'),
+                    backgroundColor: Colors.red,
+                  ),
                 );
+              } finally {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
               }
             },
             style: ElevatedButton.styleFrom(

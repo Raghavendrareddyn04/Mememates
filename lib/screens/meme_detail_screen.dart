@@ -4,9 +4,9 @@ import 'dart:ui';
 import '../models/meme_post.dart';
 import '../services/user_service.dart';
 import '../services/meme_service.dart';
-import '../widgets/spotify_player.dart';
 import 'chat_screen.dart';
 import '../models/user_profile.dart';
+import '../widgets/audius_player.dart';
 
 class MemeDetailScreen extends StatefulWidget {
   final MemePost meme;
@@ -60,7 +60,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
             await _memeService.getUserStreakInfo(widget.meme.userId);
 
         setState(() {
-          _posterProfile = profile;
+          _posterProfile = profile as Map<String, dynamic>?;
           _streakInfo = streakInfo;
           _isLiked = widget.meme.isLikedBy(currentUser.uid);
           _isPassed = widget.meme.isPassedBy(currentUser.uid);
@@ -153,9 +153,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
       name: widget.meme.userName,
       age: _posterProfile!['age'] ?? 0,
       moodBoard: List<String>.from(_posterProfile!['moodBoardImages'] ?? []),
-      anthem: _posterProfile!['anthem'] ?? '',
       artistName: _posterProfile!['artistName'] ?? '',
-      videoTitle: _posterProfile!['songTitle'] ?? '',
       hasLikedMe: true,
       canMessage: true,
       profileImage: widget.meme.userProfileImage,
@@ -310,14 +308,49 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
                 children: [
                   _buildMemeSection(true),
                   const SizedBox(height: 32),
-                  if (widget.meme.videoTitle != null) ...[
-                    SpotifyPlayer(
-                      trackUri: widget.meme.videoId ?? '',
-                      trackName: widget.meme.videoTitle!,
-                      artistName: widget.meme.artistName ?? '',
-                      albumArt: '',
+                  if (widget.meme.audiusTrackId != null) ...[
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.pink.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.music_note,
+                            color: Colors.pink,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Anthem',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                '${widget.meme.trackTitle ?? ''} - ${widget.meme.artistName ?? ''}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 12),
                   ],
                   _buildCommentSection(true),
                 ],
@@ -356,14 +389,13 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
           children: [
             _buildMemeSection(isSmallScreen),
             const SizedBox(height: 24),
-            if (widget.meme.videoTitle != null) ...[
-              SpotifyPlayer(
-                trackUri: widget.meme.videoId ?? '',
-                trackName: widget.meme.videoTitle!,
+            if (widget.meme.audiusTrackId != null) ...[
+              AudiusPlayer(
+                trackId: widget.meme.audiusTrackId!,
+                title: widget.meme.trackTitle ?? '',
                 artistName: widget.meme.artistName ?? '',
-                albumArt: '',
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
             _buildUserProfile(isSmallScreen),
             const SizedBox(height: 24),

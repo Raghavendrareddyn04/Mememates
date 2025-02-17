@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
+import 'package:flutter_auth/widgets/audius_player.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/user_service.dart';
 import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
 import 'mood_board_editor_screen.dart';
-import '../widgets/spotify_track_picker.dart';
-import '../services/spotify_service.dart';
+import '../widgets/audius_track_picker.dart';
 import 'dart:math';
 
 class ProfileSetupScreen extends StatefulWidget {
@@ -45,7 +45,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   final List<String> _moodBoardImages = [];
 
   // Music
-  SpotifyTrack? _selectedTrack;
+  Map<String, dynamic>? _selectedTrack;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Non-binary', 'Other'];
   final List<String> _interestOptions = [
@@ -146,7 +146,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
-  void _showSpotifyTrackPicker() {
+  void _showAudiusTrackPicker() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -170,9 +170,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: SpotifyTrackPicker(
+              child: AudiusTrackPicker(
                 onTrackSelected: (track) {
-                  setState(() => _selectedTrack = track);
+                  setState(() {
+                    _selectedTrack = track;
+                  });
                   Navigator.pop(context);
                 },
               ),
@@ -247,9 +249,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         gender: _gender!,
         preferredGender: _preferredGender ?? 'Both',
         moodBoardImages: _moodBoardImages,
-        anthem: _selectedTrack?.uri,
-        artistName: _selectedTrack?.artist,
-        videoTitle: _selectedTrack?.name,
+        audiusTrackId: _selectedTrack?['id'],
+        trackTitle: _selectedTrack?['title'],
+        artistName: _selectedTrack?['user']['name'],
         profileImage: _profileImageUrl,
       );
 
@@ -601,7 +603,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             const SizedBox(height: 32),
             Center(
               child: ElevatedButton.icon(
-                onPressed: _showSpotifyTrackPicker,
+                onPressed: _showAudiusTrackPicker,
                 icon: const Icon(Icons.music_note),
                 label: const Text('Choose a Song'),
                 style: ElevatedButton.styleFrom(
@@ -616,53 +618,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             ),
             if (_selectedTrack != null) ...[
               const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        _selectedTrack!.albumArt,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedTrack!.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            _selectedTrack!.artist,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () {
-                        setState(() => _selectedTrack = null);
-                      },
-                    ),
-                  ],
-                ),
+              AudiusPlayer(
+                trackId: _selectedTrack!['id'],
+                title: _selectedTrack!['title'],
+                artistName: _selectedTrack!['user']['name'],
               ),
             ],
           ],

@@ -491,9 +491,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       name: meme.userName,
       age: 0,
       moodBoard: [],
-      anthem: meme.videoTitle ?? '',
       artistName: meme.artistName ?? '',
-      videoTitle: meme.videoTitle ?? '',
+      trackTitle: meme.videoTitle ?? '',
       hasLikedMe: true,
       canMessage: true,
       profileImage: meme.userProfileImage,
@@ -888,7 +887,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     : _currentIndex == 2
                         ? 'Discover'
                         : 'Profile',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white, // Set title text color to white
+                ),
               ),
               flexibleSpace: Container(
                 decoration: BoxDecoration(

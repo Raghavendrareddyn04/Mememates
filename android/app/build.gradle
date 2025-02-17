@@ -25,7 +25,7 @@ android {
     }
 
     defaultConfig {
-       manifestPlaceholders = [redirectSchemeName: "spotify-sdk", redirectHostName: "auth"]
+     
         applicationId "com.example.mememates"
         minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion

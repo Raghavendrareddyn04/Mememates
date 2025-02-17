@@ -29,7 +29,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
   final _scrollController = ScrollController();
 
   List<String> _moodBoardImages = [];
-  String? _selectedSong;
   String? _profileImageUrl;
   bool _isLoading = false;
   int? _age;
@@ -120,7 +119,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
       _bioController.text = widget.initialProfile!['bio'] ?? '';
       _moodBoardImages =
           List<String>.from(widget.initialProfile!['moodBoardImages'] ?? []);
-      _selectedSong = widget.initialProfile!['anthem'];
       _profileImageUrl = widget.initialProfile!['profileImage'];
       _age = widget.initialProfile!['age'];
       _gender = widget.initialProfile!['gender'];
@@ -174,13 +172,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen>
           name: _nameController.text,
           bio: _bioController.text,
           moodBoardImages: _moodBoardImages,
-          anthem: _selectedSong,
           profileImage: _profileImageUrl,
           age: _age,
           gender: _gender,
           preferredGender: _preferredGender,
           artistName: _artistName,
-          videoTitle: _songTitle,
+          trackTitle: _songTitle,
           interests: _interests,
         );
 

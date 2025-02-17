@@ -3,23 +3,59 @@ class UserProfile {
   final String name;
   final int age;
   final List<String> moodBoard;
-  final String anthem;
-  final String artistName;
-  final String videoTitle;
+  final String? audiusTrackId;
+  final String? trackTitle;
+  final String? artistName;
   final bool hasLikedMe;
+  final bool canMessage;
   final String? profileImage;
-  bool canMessage;
+  final String? bio;
 
   UserProfile({
     required this.userId,
     required this.name,
     required this.age,
     required this.moodBoard,
-    required this.anthem,
-    required this.artistName,
-    required this.videoTitle,
+    this.audiusTrackId,
+    this.trackTitle,
+    this.artistName,
     required this.hasLikedMe,
     required this.canMessage,
     this.profileImage,
+    this.bio,
   });
+
+  factory UserProfile.fromMap(Map<String, dynamic> map) {
+    return UserProfile(
+      userId: map['userId'] as String,
+      name: map['name'] as String? ?? '',
+      age: map['age'] as int? ?? 0,
+      moodBoard: List<String>.from(map['moodBoardImages'] ?? []),
+      audiusTrackId: map['audiusTrackId'] as String?,
+      trackTitle: map['trackTitle'] as String?,
+      artistName: map['artistName'] as String?,
+      hasLikedMe: map['hasLikedMe'] as bool? ?? false,
+      canMessage: map['canMessage'] as bool? ?? false,
+      profileImage: map['profileImage'] as String?,
+      bio: map['bio'] as String?,
+    );
+  }
+
+  get interests => null;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'userId': userId,
+      'name': name,
+      'age': age,
+      'moodBoardImages': moodBoard,
+      'audiusTrackId': audiusTrackId,
+      'trackTitle': trackTitle,
+      'artistName': artistName,
+      'hasLikedMe': hasLikedMe,
+      'canMessage': canMessage,
+      'profileImage': profileImage,
+      'bio': bio,
+    };
+  }
 }
