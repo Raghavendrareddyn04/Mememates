@@ -15,6 +15,8 @@ class MemePost {
   final DateTime createdAt;
   List<String> likedByUsers;
   List<String> passedByUsers;
+  List<String>
+      temporarilyPassedUsers; // New list to track temporarily passed users
   final String? userProfileImage;
   bool _isReverted = false;
   final _memeService = MemeService();
@@ -34,11 +36,16 @@ class MemePost {
     required this.createdAt,
     List<String>? likedByUsers,
     List<String>? passedByUsers,
+    List<String>? temporarilyPassedUsers,
     this.userProfileImage,
   })  : likedByUsers = likedByUsers ?? [],
-        passedByUsers = passedByUsers ?? [];
+        passedByUsers = passedByUsers ?? [],
+        temporarilyPassedUsers = temporarilyPassedUsers ?? [];
 
   bool get isReverted => _isReverted;
+
+  bool isTemporarilyPassed(String userId) =>
+      temporarilyPassedUsers.contains(userId);
 
   String get timestamp {
     final now = DateTime.now();
@@ -74,7 +81,8 @@ class MemePost {
       return "This is your meme";
     } else if (isLikedBy(currentUserId)) {
       return "You liked this meme! 👍";
-    } else if (isPassedBy(currentUserId)) {
+    } else if (isPassedBy(currentUserId) &&
+        !isTemporarilyPassed(currentUserId)) {
       return "You passed on this meme ✋";
     }
     return "";
@@ -83,6 +91,7 @@ class MemePost {
   void like(String userId) {
     if (!isLikedBy(userId) && !isPassedBy(userId)) {
       likedByUsers.add(userId);
+      temporarilyPassedUsers.remove(userId); // Clear temporary pass on like
       _isReverted = false;
     }
   }
@@ -90,19 +99,31 @@ class MemePost {
   void pass(String userId) {
     if (!isPassedBy(userId) && !isLikedBy(userId)) {
       passedByUsers.add(userId);
+      temporarilyPassedUsers
+          .remove(userId); // Clear temporary pass on permanent pass
       _isReverted = false;
     }
   }
 
-  void removeInteractions(String userId) {
-    if (likedByUsers.remove(userId) || passedByUsers.remove(userId)) {
-      _isReverted = true;
+  void temporaryPass(String userId) {
+    if (!isPassedBy(userId) && !isLikedBy(userId)) {
+      temporarilyPassedUsers.add(userId);
+      passedByUsers
+          .remove(userId); // Remove from permanent pass list if present
     }
+  }
+
+  void removeInteractions(String userId) {
+    likedByUsers.remove(userId);
+    passedByUsers.remove(userId);
+    temporarilyPassedUsers.remove(userId);
+    _isReverted = true;
   }
 
   bool shouldRemoveFromView(String currentUserId) {
     return !_isReverted &&
-        (isLikedBy(currentUserId) || isPassedBy(currentUserId));
+        (isLikedBy(currentUserId) ||
+            (isPassedBy(currentUserId) && !isTemporarilyPassed(currentUserId)));
   }
 
   void resetRevertState() {
@@ -125,6 +146,8 @@ class MemePost {
       createdAt: map['createdAt']?.toDate() ?? DateTime.now(),
       likedByUsers: List<String>.from(map['likedByUsers'] ?? []),
       passedByUsers: List<String>.from(map['passedByUsers'] ?? []),
+      temporarilyPassedUsers:
+          List<String>.from(map['temporarilyPassedUsers'] ?? []),
       userProfileImage: map['userProfileImage'],
     );
   }
@@ -145,6 +168,7 @@ class MemePost {
       'createdAt': createdAt,
       'likedByUsers': likedByUsers,
       'passedByUsers': passedByUsers,
+      'temporarilyPassedUsers': temporarilyPassedUsers,
       'userProfileImage': userProfileImage,
     };
   }

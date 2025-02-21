@@ -19,6 +19,22 @@ class CloudinaryService {
     );
   }
 
+  Future<String> uploadVideo(String videoPath) async {
+    try {
+      final response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          videoPath,
+          resourceType: CloudinaryResourceType.Video,
+          folder: 'mememates/videos',
+        ),
+      );
+      return response.secureUrl;
+    } catch (e) {
+      print('Cloudinary video upload error: $e');
+      throw 'Failed to upload video: $e';
+    }
+  }
+
   Future<String> uploadImage(String imagePath) async {
     try {
       final response = await cloudinary.uploadFile(
@@ -40,6 +56,7 @@ class CloudinaryService {
     List<String> transformations,
   ) async {
     try {
+      // First upload the image
       final response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
           imagePath,
@@ -48,10 +65,11 @@ class CloudinaryService {
         ),
       );
 
-      final publicId = response.publicId;
-      final transformationString = transformations.join('/');
+      // Then construct the transformed URL
+      final publicId = _extractPublicId(response.secureUrl);
+      final transformationString = transformations.join(",");
 
-      return 'https://res.cloudinary.com/$cloudName/image/upload/$transformationString/$publicId';
+      return 'https://res.cloudinary.com/$cloudName/image/upload/$transformationString/v1/$publicId';
     } catch (e) {
       print('Cloudinary upload error: $e');
       throw 'Failed to upload image: $e';
@@ -226,6 +244,15 @@ class CloudinaryService {
       }
     } catch (e) {
       throw 'Failed to store mood board: $e';
+    }
+  }
+
+  Future<String> generateVideoThumbnail(String videoUrl) async {
+    try {
+      final publicId = _extractPublicId(videoUrl);
+      return 'https://res.cloudinary.com/$cloudName/video/upload/w_640,h_360,c_fill,q_auto,f_jpg/v1/$publicId.jpg';
+    } catch (e) {
+      throw 'Failed to generate video thumbnail: $e';
     }
   }
 }

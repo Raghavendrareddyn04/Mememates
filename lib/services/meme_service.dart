@@ -12,6 +12,65 @@ class MemeService {
   final ChatService _chatService = ChatService();
   final NotificationService _notificationService = NotificationService();
 
+  // Post a video meme
+  Future<void> postVideo({
+    required String userId,
+    required String userName,
+    required String videoPath,
+    required String caption,
+    String? thumbnailPath,
+  }) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userProfileImage = userDoc.data()?['profileImage'] as String?;
+      final lastPosted = userDoc.data()?['lastPosted'] as Timestamp?;
+      final currentStreak = userDoc.data()?['memeStreak'] ?? 0;
+
+      // Calculate streak
+      int newStreak = currentStreak;
+      if (lastPosted != null) {
+        final difference = DateTime.now().difference(lastPosted.toDate());
+        if (difference.inDays == 1) {
+          newStreak++;
+        } else if (difference.inDays > 1) {
+          newStreak = 1;
+        }
+      } else {
+        newStreak = 1;
+      }
+
+      // Upload video and thumbnail
+      final videoUrl = await _cloudinaryService.uploadVideo(videoPath);
+      String? thumbnailUrl;
+      if (thumbnailPath != null) {
+        thumbnailUrl = await _cloudinaryService.uploadImage(thumbnailPath);
+      }
+
+      // Create meme document
+      final memeRef = await _firestore.collection('memes').add({
+        'userId': userId,
+        'userName': userName,
+        'memeUrl': videoUrl,
+        'thumbnailUrl': thumbnailUrl,
+        'caption': caption,
+        'isVideo': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'likedByUsers': [],
+        'passedByUsers': [],
+        'userProfileImage': userProfileImage,
+      });
+
+      // Update user's streak and last posted time
+      await _firestore.collection('users').doc(userId).update({
+        'lastPosted': FieldValue.serverTimestamp(),
+        'memeStreak': newStreak,
+        'postedMemes': FieldValue.arrayUnion([memeRef.id])
+      });
+    } catch (e) {
+      throw 'Failed to post video meme: $e';
+    }
+  }
+
   // Post a new meme and update streak
   Future<void> postMeme({
     required String userId,
@@ -99,6 +158,7 @@ class MemeService {
         'likedByUsers': [],
         'passedByUsers': [],
         'userProfileImage': userProfileImage,
+        'isVideo': false,
       });
 
       // Update user's streak and last posted time
@@ -194,6 +254,8 @@ class MemeService {
         }
       }
 
+      // Sort memes by creation date, newest first
+      memes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return memes;
     });
   }
@@ -506,6 +568,123 @@ class MemeService {
       );
     } catch (e) {
       print('Error handling mood board interaction: $e');
+    }
+  }
+
+  Future<String?> getConnectionRequestStatus(
+    String senderId,
+    String receiverId,
+  ) async {
+    try {
+      final requestDoc = await _firestore
+          .collection('connection_requests')
+          .doc('${senderId}_${receiverId}')
+          .get();
+
+      if (requestDoc.exists) {
+        return requestDoc.data()?['status'] as String;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting connection request status: $e');
+      return null;
+    }
+  }
+
+  Future<void> sendConnectionRequest(
+    String senderId,
+    String receiverId,
+  ) async {
+    try {
+      // Get sender's name for notification
+      final senderDoc =
+          await _firestore.collection('users').doc(senderId).get();
+      final senderName = senderDoc.data()?['name'] ?? 'Someone';
+
+      final requestId = '${senderId}_${receiverId}';
+
+      // Check if request already exists
+      final existingRequest = await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .get();
+
+      if (existingRequest.exists) {
+        throw 'Connection request already exists';
+      }
+
+      // Create connection request
+      await _firestore.collection('connection_requests').doc(requestId).set({
+        'senderId': senderId,
+        'receiverId': receiverId,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Send notification to receiver
+      await _notificationService.createNotification(
+        userId: receiverId,
+        title: 'New Connection Request! 🤝',
+        message: '$senderName wants to connect with you!',
+        type: NotificationType.connection,
+      );
+    } catch (e) {
+      throw 'Failed to send connection request: $e';
+    }
+  }
+
+  Future<void> handleConnectionRequest(
+    String requestId,
+    String status,
+  ) async {
+    try {
+      // Get request details
+      final requestDoc = await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .get();
+
+      if (!requestDoc.exists) {
+        throw 'Connection request not found';
+      }
+
+      final data = requestDoc.data()!;
+      final senderId = data['senderId'] as String;
+      final receiverId = data['receiverId'] as String;
+
+      // Get user names
+      final receiverDoc =
+          await _firestore.collection('users').doc(receiverId).get();
+      final receiverName = receiverDoc.data()?['name'] ?? 'Someone';
+
+      // Update request status
+      await _firestore.collection('connection_requests').doc(requestId).update({
+        'status': status,
+        'respondedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Send notifications based on status
+      if (status == 'accepted') {
+        await _notificationService.createNotification(
+          userId: senderId,
+          title: 'Connection Accepted! 🎉',
+          message: '$receiverName accepted your connection request!',
+          type: NotificationType.connection,
+        );
+
+        // Create chat for accepted connections
+        await _chatService.createChatOnMemeLike(
+            requestId, senderId, receiverId);
+      } else if (status == 'declined') {
+        await _notificationService.createNotification(
+          userId: senderId,
+          title: 'Connection Update',
+          message: '$receiverName declined your connection request',
+          type: NotificationType.connection,
+        );
+      }
+    } catch (e) {
+      throw 'Failed to handle connection request: $e';
     }
   }
 }

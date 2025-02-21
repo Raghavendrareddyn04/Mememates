@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/notification_service.dart';
+import '../services/meme_service.dart';
 import 'dart:ui';
 
 class NotificationsScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen>
     with SingleTickerProviderStateMixin {
   final _notificationService = NotificationService();
+  final _memeService = MemeService();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -20,7 +22,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   String _selectedFilter = 'All';
   List<AppNotification> _filteredNotifications = [];
 
-  final List<String> _filters = ['All', 'Matches', 'Streaks', 'Activity'];
+  final List<String> _filters = [
+    'All',
+    'Matches',
+    'Streaks',
+    'Activity',
+    'Connections'
+  ];
 
   @override
   void initState() {
@@ -69,6 +77,48 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       );
       _filteredNotifications =
           notifications.where((n) => n.type == filterType).toList();
+    }
+  }
+
+  Future<void> _handleConnectionRequest(
+      AppNotification notification, bool accept) async {
+    try {
+      // Extract request ID from the notification
+      final parts = notification.message.split(' wants to connect with you');
+      if (parts.isEmpty) return;
+
+      final senderName = parts[0];
+
+      // Handle the connection request
+      await _memeService.handleConnectionRequest(
+        notification.id,
+        accept ? 'accepted' : 'declined',
+      );
+
+      // Mark notification as read
+      _notificationService.markAsRead(notification.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              accept
+                  ? 'Connection request from $senderName accepted'
+                  : 'Connection request from $senderName declined',
+            ),
+            backgroundColor: accept ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -346,12 +396,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Widget _buildNotificationCard(
       AppNotification notification, bool isWideScreen) {
+    final bool isConnectionRequest =
+        notification.message.contains('wants to connect with you');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _notificationService.markAsRead(notification.id),
+          onTap: isConnectionRequest
+              ? null
+              : () => _notificationService.markAsRead(notification.id),
           borderRadius: BorderRadius.circular(16),
           child: Ink(
             decoration: BoxDecoration(
@@ -412,18 +467,45 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              TextButton(
-                                onPressed: () => _notificationService
-                                    .markAsRead(notification.id),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.pink,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
+                              if (isConnectionRequest) ...[
+                                TextButton(
+                                  onPressed: () => _handleConnectionRequest(
+                                      notification, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.green,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
                                   ),
+                                  child: const Text('Accept'),
                                 ),
-                                child: const Text('Mark as Read'),
-                              ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () => _handleConnectionRequest(
+                                      notification, false),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  child: const Text('Decline'),
+                                ),
+                              ] else
+                                TextButton(
+                                  onPressed: () => _notificationService
+                                      .markAsRead(notification.id),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.pink,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  child: const Text('Mark as Read'),
+                                ),
                             ],
                           ),
                         ],
@@ -455,6 +537,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       case NotificationType.activity:
         icon = Icons.notifications_active;
         color = Colors.green;
+        break;
+      case NotificationType.connection:
+        icon = Icons.link;
+        color = Colors.blueGrey;
         break;
     }
 

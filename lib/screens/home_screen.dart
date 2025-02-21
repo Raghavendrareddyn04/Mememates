@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_auth/models/user_profile.dart';
 import 'package:flutter_auth/screens/meme_detail_screen.dart';
 import 'package:flutter_auth/screens/profile_screen.dart';
+import 'package:flutter_auth/screens/video_feed_screen.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/meme_post.dart';
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _streakInfo;
   final bool _isLoading = false;
   int _currentIndex = 1;
+  bool _isVideoMode = false;
 
   // Feed Preferences
   RangeValues _ageRange = const RangeValues(18, 35);
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _fabController;
   late AnimationController _preferencesController;
   late Animation<double> _fabAnimation;
+  late TabController _feedTabController;
 
   @override
   void initState() {
@@ -51,6 +54,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeAnimations();
     _loadPreferences();
     _loadStreakInfo();
+    _feedTabController = TabController(length: 2, vsync: this);
+    _feedTabController.addListener(_handleTabChange);
+  }
+
+  void _handleTabChange() {
+    if (_feedTabController.indexIsChanging) {
+      setState(() {
+        _isVideoMode = _feedTabController.index == 1;
+      });
+    }
   }
 
   void _initializeAnimations() {
@@ -121,6 +134,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final currentUser = _authService.currentUser;
     if (currentUser == null) return const SizedBox();
 
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.pink.shade900,
+                Colors.deepPurple.shade900,
+              ],
+            ),
+          ),
+          child: TabBar(
+            controller: _feedTabController,
+            indicatorColor: Colors.white,
+            indicatorWeight: 3,
+            labelColor: Colors.white, // Selected tab text color
+            unselectedLabelColor: Colors.white, // Unselected tab text color
+            tabs: const [
+              Tab(
+                icon: Icon(Icons.photo_library,
+                    color: Colors.white), // Icon in white
+                child: Text('Memes',
+                    style: TextStyle(color: Colors.white)), // Text in white
+              ),
+              Tab(
+                icon: Icon(Icons.video_collection,
+                    color: Colors.white), // Icon in white
+                child: Text('Videos',
+                    style: TextStyle(color: Colors.white)), // Text in white
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _feedTabController,
+            children: [
+              _buildMemeFeed(currentUser),
+              const VideoFeedScreen(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMemeFeed(currentUser) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWideScreen = constraints.maxWidth > 600;
@@ -245,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPreferencesPanel(bool isSmallScreen) {
+  Widget _buildPreferencesPanel(bool isWideScreen) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -294,7 +354,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             dropdownColor: Colors.deepPurple,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: 'Show Memes From',
+              labelText: 'Show Content From',
               labelStyle: const TextStyle(color: Colors.white70),
               filled: true,
               fillColor: Colors.white.withOpacity(0.1),
@@ -380,13 +440,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.sentiment_dissatisfied,
+              _isVideoMode ? Icons.video_library : Icons.sentiment_dissatisfied,
               size: isWideScreen ? 80 : 64,
               color: Colors.white.withOpacity(0.5),
             ),
             const SizedBox(height: 24),
             Text(
-              'No memes yet',
+              _isVideoMode ? 'No videos yet' : 'No memes yet',
               style: TextStyle(
                 fontSize: isWideScreen ? 24 : 20,
                 color: Colors.white,
@@ -395,7 +455,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 12),
             Text(
-              'Be the first to post a meme!',
+              _isVideoMode
+                  ? 'Be the first to share a video!'
+                  : 'Be the first to post a meme!',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.7),
                 fontSize: isWideScreen ? 18 : 16,
@@ -404,8 +466,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: _showPostMemeDialog,
-              icon: const Icon(Icons.add_photo_alternate),
-              label: const Text('Post a Meme'),
+              icon: Icon(_isVideoMode
+                  ? Icons.video_library
+                  : Icons.add_photo_alternate),
+              label: Text(_isVideoMode ? 'Upload Video' : 'Post a Meme'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.pink,
                 foregroundColor: Colors.white,
@@ -550,9 +614,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Post a Meme',
-                style: TextStyle(
+              Text(
+                _isVideoMode ? 'Share a Video' : 'Post a Meme',
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -578,43 +642,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   _buildPostOptionButton(
                     icon: Icons.photo_library,
-                    label: 'Choose from Gallery',
+                    label: _isVideoMode
+                        ? 'Choose Video from Gallery'
+                        : 'Choose from Gallery',
                     onPressed: () async {
-                      final XFile? image = await _imagePicker.pickImage(
-                        source: ImageSource.gallery,
-                      );
-                      if (image != null) {
-                        _showPostConfirmation(image, captionController.text);
+                      final XFile? media = _isVideoMode
+                          ? await _imagePicker.pickVideo(
+                              source: ImageSource.gallery)
+                          : await _imagePicker.pickImage(
+                              source: ImageSource.gallery);
+                      if (media != null) {
+                        _showPostConfirmation(media, captionController.text);
                       }
                     },
                   ),
                   const SizedBox(height: 12),
                   _buildPostOptionButton(
-                    icon: Icons.camera_alt,
-                    label: 'Take Photo',
+                    icon: _isVideoMode ? Icons.videocam : Icons.camera_alt,
+                    label: _isVideoMode ? 'Record Video' : 'Take Photo',
                     onPressed: () async {
-                      final XFile? image = await _imagePicker.pickImage(
-                        source: ImageSource.camera,
-                      );
-                      if (image != null) {
-                        _showPostConfirmation(image, captionController.text);
+                      final XFile? media = _isVideoMode
+                          ? await _imagePicker.pickVideo(
+                              source: ImageSource.camera)
+                          : await _imagePicker.pickImage(
+                              source: ImageSource.camera);
+                      if (media != null) {
+                        _showPostConfirmation(media, captionController.text);
                       }
                     },
                   ),
-                  const SizedBox(height: 12),
-                  _buildPostOptionButton(
-                    icon: Icons.create,
-                    label: 'Create Your Own Meme',
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MemeCreatorScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                  if (!_isVideoMode) ...[
+                    const SizedBox(height: 12),
+                    _buildPostOptionButton(
+                      icon: Icons.create,
+                      label: 'Create Your Own Meme',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MemeCreatorScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -650,58 +722,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showPostConfirmation(XFile image, String caption) {
+  void _showPostConfirmation(XFile media, String caption) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.deepPurple.shade900,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Post Meme?',
-          style: TextStyle(color: Colors.white),
+        title: Text(
+          _isVideoMode ? 'Post Video?' : 'Post Meme?',
+          style: const TextStyle(color: Colors.white),
         ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FutureBuilder<Uint8List>(
-                future: image.readAsBytes(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 200,
-                      child: LoadingAnimation(
-                        message: "Finding your perfect meme match...",
+              if (!_isVideoMode)
+                FutureBuilder<Uint8List>(
+                  future: media.readAsBytes(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SizedBox(
+                        height: 200,
+                        child: LoadingAnimation(
+                          message: "Loading preview...",
+                        ),
+                      );
+                    }
+                    if (snapshot.hasError || !snapshot.hasData) {
+                      return const SizedBox(
+                        height: 200,
+                        child: Center(child: Text('Error loading preview')),
+                      );
+                    }
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.3,
+                        maxWidth: MediaQuery.of(context).size.width * 0.8,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          snapshot.data!,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     );
-                  }
-                  if (snapshot.hasError) {
-                    return const SizedBox(
-                      height: 200,
-                      child: Center(child: Text('Error loading image')),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const SizedBox(
-                      height: 200,
-                      child: Center(child: Text('No image data')),
-                    );
-                  }
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.3,
-                      maxWidth: MediaQuery.of(context).size.width * 0.8,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        snapshot.data!,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  );
-                },
-              ),
+                  },
+                ),
               if (caption.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -724,7 +791,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(context);
-              _handleImagePost(image, caption);
+              _handleMediaPost(media, caption);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.pink,
@@ -737,20 +804,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _handleImagePost(XFile image, String caption) async {
+  Future<void> _handleMediaPost(XFile media, String caption) async {
     final currentUser = _authService.currentUser;
     if (currentUser != null && mounted) {
       try {
-        await _memeService.postMeme(
-          userId: currentUser.uid,
-          userName: currentUser.displayName ?? 'Anonymous',
-          imagePath: image.path,
-          caption: caption,
-        );
+        if (_isVideoMode) {
+          await _memeService.postVideo(
+            userId: currentUser.uid,
+            userName: currentUser.displayName ?? 'Anonymous',
+            videoPath: media.path,
+            caption: caption,
+          );
+        } else {
+          await _memeService.postMeme(
+            userId: currentUser.uid,
+            userName: currentUser.displayName ?? 'Anonymous',
+            imagePath: media.path,
+            caption: caption,
+          );
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Meme posted successfully!'),
+            SnackBar(
+              content: Text(_isVideoMode
+                  ? 'Video posted successfully!'
+                  : 'Meme posted successfully!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -759,7 +837,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error posting meme: $e'),
+              content:
+                  Text('Error posting ${_isVideoMode ? 'video' : 'meme'}: $e'),
               backgroundColor: Colors.red,
             ),
           );
@@ -891,7 +970,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         : 'Profile',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.white, // Set title text color to white
+                  color: Colors.white,
                 ),
               ),
               flexibleSpace: Container(
@@ -969,8 +1048,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: FloatingActionButton.extended(
                       onPressed: _showPostMemeDialog,
                       backgroundColor: Colors.pink,
-                      icon: const Icon(Icons.add_photo_alternate),
-                      label: const Text('Create'),
+                      icon: Icon(_isVideoMode
+                          ? Icons.video_library
+                          : Icons.add_photo_alternate),
+                      label: Text(_isVideoMode ? 'Upload Video' : 'Create'),
                     ),
                   ),
                 ),
@@ -981,7 +1062,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: FloatingActionButton(
                       onPressed: _showPostMemeDialog,
                       backgroundColor: Colors.pink,
-                      child: const Icon(Icons.add_photo_alternate),
+                      child: Icon(_isVideoMode
+                          ? Icons.video_library
+                          : Icons.add_photo_alternate),
                     ),
                   ),
                 ),
@@ -995,6 +1078,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fabController.dispose();
     _preferencesController.dispose();
+    _feedTabController.dispose();
     super.dispose();
   }
 }
@@ -1050,6 +1134,7 @@ class _MemeCardState extends State<_MemeCard>
   ];
 
   String _currentQuote = '';
+
   @override
   void initState() {
     super.initState();
@@ -1429,6 +1514,7 @@ class _MemeCardState extends State<_MemeCard>
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 widget.meme.caption,

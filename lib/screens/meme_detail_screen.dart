@@ -163,6 +163,112 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
     );
   }
 
+  Widget _buildMoodBoardSection(bool isWideScreen) {
+    final hasMoodBoard = _posterProfile != null &&
+        (_posterProfile!['moodBoardImages'] as List?)?.isNotEmpty == true;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: hasMoodBoard
+                      ? Colors.purple.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.photo_library,
+                  color: hasMoodBoard ? Colors.purple : Colors.grey,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Mood Board',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (hasMoodBoard)
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: isWideScreen ? 2 : 2,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children:
+                  List.from(_posterProfile!['moodBoardImages']).map((imageUrl) {
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.white.withOpacity(0.1),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.purple),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }).toList(),
+            )
+          else
+            Center(
+              child: Text(
+                'No mood board available',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleLike() async {
     final currentUser = _userService.currentUser;
     if (currentUser == null) return;
@@ -348,7 +454,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
           ],
         ),
       ),
-      child: Center(
+      child: const Center(
         child: LoadingAnimation(
           message: "Loading details...",
         ),
@@ -384,6 +490,8 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
                 children: [
                   _buildUserProfile(true),
                   const SizedBox(height: 32),
+                  _buildMoodBoardSection(true),
+                  const SizedBox(height: 32),
                   _buildUserStats(true),
                   const SizedBox(height: 32),
                   if (_userMemes != null && _userMemes!.isNotEmpty)
@@ -409,6 +517,8 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
             _buildMusicAnthemSection(),
             const SizedBox(height: 24),
             _buildUserProfile(isSmallScreen),
+            const SizedBox(height: 24),
+            _buildMoodBoardSection(isSmallScreen),
             const SizedBox(height: 24),
             _buildUserStats(isSmallScreen),
             const SizedBox(height: 24),
