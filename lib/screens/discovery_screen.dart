@@ -891,6 +891,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         backgroundColor: Colors.pink,
         icon: const Icon(Icons.add_photo_alternate),
         label: const Text('Create'),
+        heroTag: 'discovery_fab', // Assign a unique heroTag
       ),
     );
   }

@@ -1046,6 +1046,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: ScaleTransition(
                     scale: _fabAnimation,
                     child: FloatingActionButton.extended(
+                      heroTag: 'fab_extended', // Unique heroTag
                       onPressed: _showPostMemeDialog,
                       backgroundColor: Colors.pink,
                       icon: Icon(_isVideoMode
@@ -1060,6 +1061,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 16, right: 16),
                     child: FloatingActionButton(
+                      heroTag: 'fab_regular', // Unique heroTag
                       onPressed: _showPostMemeDialog,
                       backgroundColor: Colors.pink,
                       child: Icon(_isVideoMode

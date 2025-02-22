@@ -5,12 +5,17 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId:
-        '732413251106-jedg3hl2a5di93pr30iduulsav3pcake.apps.googleusercontent.com',
-    scopes: ['email', 'profile'],
-  );
+  GoogleSignIn? _googleSignIn;
   FirebaseFirestore? _firestore;
+
+  AuthService() {
+    if (!kIsWeb) {
+      // Only initialize GoogleSignIn for mobile
+      _googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+    }
+  }
 
   // Initialize Firestore lazily
   FirebaseFirestore get firestore {
@@ -85,12 +90,16 @@ class AuthService {
       _firestore = FirebaseFirestore.instance;
 
       if (kIsWeb) {
-        // Web implementation
-        GoogleAuthProvider authProvider = GoogleAuthProvider();
-        return await _auth.signInWithPopup(authProvider);
+        // Web implementation using Firebase Auth directly
+        final provider = GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+
+        // Use signInWithPopup for web
+        return await _auth.signInWithPopup(provider);
       } else {
         // Mobile implementation
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        final GoogleSignInAccount? googleUser = await _googleSignIn?.signIn();
         if (googleUser == null) {
           throw 'Google sign in was cancelled';
         }
@@ -107,7 +116,9 @@ class AuthService {
     } catch (e) {
       // Ensure we're signed out of Google if anything fails
       try {
-        await _googleSignIn.signOut();
+        if (!kIsWeb) {
+          await _googleSignIn?.signOut();
+        }
       } catch (_) {}
       throw 'Google sign in failed: $e';
     }
@@ -119,7 +130,7 @@ class AuthService {
       // Sign out from all providers first
       if (!kIsWeb) {
         try {
-          await _googleSignIn.signOut();
+          await _googleSignIn?.signOut();
         } catch (_) {}
       }
 

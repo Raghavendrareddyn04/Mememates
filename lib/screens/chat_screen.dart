@@ -328,6 +328,21 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
       ),
+      floatingActionButton: _isComposing
+          ? FloatingActionButton(
+              onPressed: _sendMessage,
+              backgroundColor: Colors.pink,
+              child: const Icon(Icons.send),
+              heroTag: 'chat_send_button', // Add unique hero tag
+            )
+          : FloatingActionButton(
+              onPressed: () {
+                // Implement voice recording
+              },
+              backgroundColor: Colors.white.withOpacity(0.1),
+              child: const Icon(Icons.mic),
+              heroTag: 'chat_mic_button', // Add unique hero tag
+            ),
     );
   }
 

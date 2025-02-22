@@ -263,33 +263,68 @@ class MemeService {
   // Like meme and store in user's liked memes
   Future<void> likeMeme(String memeId, String userId) async {
     try {
-      final batch = _firestore.batch();
-      final memeRef = _firestore.collection('memes').doc(memeId);
-      final userRef = _firestore.collection('users').doc(userId);
+      // Use transaction for atomic operations
+      await _firestore.runTransaction((transaction) async {
+        final memeRef = _firestore.collection('memes').doc(memeId);
+        final userRef = _firestore.collection('users').doc(userId);
 
-      // Get meme data first
-      final memeDoc = await memeRef.get();
-      final memeData = memeDoc.data();
-      final memeOwnerId = memeData?['userId'] as String?;
+        final memeDoc = await transaction.get(memeRef);
+        if (!memeDoc.exists) {
+          throw 'Meme not found';
+        }
 
-      if (memeOwnerId == null) {
-        throw 'Meme owner not found';
-      }
+        final memeData = memeDoc.data()!;
+        final memeOwnerId = memeData['userId'] as String;
 
-      batch.update(memeRef, {
-        'likedByUsers': FieldValue.arrayUnion([userId]),
+        // Don't allow self-likes
+        if (memeOwnerId == userId) {
+          throw 'Cannot like your own meme';
+        }
+
+        // Check if already liked
+        final likedByUsers = List<String>.from(memeData['likedByUsers'] ?? []);
+        if (likedByUsers.contains(userId)) {
+          throw 'Meme already liked';
+        }
+
+        // Update meme document
+        transaction.update(memeRef, {
+          'likedByUsers': FieldValue.arrayUnion([userId]),
+        });
+
+        // Update user's liked memes
+        transaction.update(userRef, {
+          'likedMemes': FieldValue.arrayUnion([memeId])
+        });
+
+        // Get user name for notification
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        final userName = userDoc.data()?['name'] ?? 'Someone';
+
+        // Create notification
+        await _notificationService.handleMemeInteraction(
+          memeOwnerId: memeOwnerId,
+          interactorName: userName,
+          isLike: true,
+          memeId: memeId,
+        );
+
+        // Check for mutual like and create vibe match if needed
+        final hasOtherUserLikedMyMeme =
+            await hasUserLikedMyMeme(userId, memeOwnerId);
+        if (hasOtherUserLikedMyMeme) {
+          await _notificationService.handleVibeMatch(memeOwnerId, userName);
+
+          // Get meme owner's name and notify the current user
+          final ownerDoc =
+              await _firestore.collection('users').doc(memeOwnerId).get();
+          final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
+          await _notificationService.handleVibeMatch(userId, ownerName);
+        }
       });
-
-      batch.update(userRef, {
-        'likedMemes': FieldValue.arrayUnion([memeId])
-      });
-
-      await batch.commit();
-
-      // Handle notifications and chat creation after successful like
-      await _handleLikeBackground(memeId, userId, memeOwnerId);
     } catch (e) {
-      throw 'Failed to like meme: $e';
+      print('Error liking meme: $e');
+      rethrow;
     }
   }
 
@@ -599,37 +634,48 @@ class MemeService {
       // Get sender's name for notification
       final senderDoc =
           await _firestore.collection('users').doc(senderId).get();
+      if (!senderDoc.exists) {
+        throw 'Sender not found';
+      }
       final senderName = senderDoc.data()?['name'] ?? 'Someone';
 
       final requestId = '${senderId}_${receiverId}';
 
-      // Check if request already exists
-      final existingRequest = await _firestore
-          .collection('connection_requests')
-          .doc(requestId)
-          .get();
+      // Use transaction to ensure atomic operations
+      await _firestore.runTransaction((transaction) async {
+        // Check if request already exists
+        final existingRequest = await transaction.get(
+          _firestore.collection('connection_requests').doc(requestId),
+        );
 
-      if (existingRequest.exists) {
-        throw 'Connection request already exists';
-      }
+        if (existingRequest.exists) {
+          throw 'Connection request already exists';
+        }
 
-      // Create connection request
-      await _firestore.collection('connection_requests').doc(requestId).set({
-        'senderId': senderId,
-        'receiverId': receiverId,
-        'status': 'pending',
-        'timestamp': FieldValue.serverTimestamp(),
+        // Create connection request
+        transaction.set(
+          _firestore.collection('connection_requests').doc(requestId),
+          {
+            'senderId': senderId,
+            'receiverId': receiverId,
+            'status': 'pending',
+            'timestamp': FieldValue.serverTimestamp(),
+            'senderName': senderName, // Add sender name to request
+          },
+        );
       });
 
       // Send notification to receiver
-      await _notificationService.createNotification(
-        userId: receiverId,
-        title: 'New Connection Request! 🤝',
-        message: '$senderName wants to connect with you!',
-        type: NotificationType.connection,
+      await _notificationService.handleConnectionRequest(
+        receiverId: receiverId,
+        senderName: senderName,
+        isAccepted: false,
+        requestId: requestId,
+        senderId: senderId,
       );
     } catch (e) {
-      throw 'Failed to send connection request: $e';
+      print('Error sending connection request: $e');
+      rethrow;
     }
   }
 
@@ -638,53 +684,70 @@ class MemeService {
     String status,
   ) async {
     try {
-      // Get request details
-      final requestDoc = await _firestore
-          .collection('connection_requests')
-          .doc(requestId)
-          .get();
+      await _firestore.runTransaction((transaction) async {
+        final requestDoc = await transaction.get(
+          _firestore.collection('connection_requests').doc(requestId),
+        );
 
-      if (!requestDoc.exists) {
-        throw 'Connection request not found';
-      }
+        if (!requestDoc.exists) {
+          throw 'Connection request not found';
+        }
 
-      final data = requestDoc.data()!;
-      final senderId = data['senderId'] as String;
-      final receiverId = data['receiverId'] as String;
+        final data = requestDoc.data()!;
+        if (data['status'] != 'pending') {
+          throw 'Request has already been handled';
+        }
 
-      // Get user names
-      final receiverDoc =
-          await _firestore.collection('users').doc(receiverId).get();
-      final receiverName = receiverDoc.data()?['name'] ?? 'Someone';
+        final senderId = data['senderId'] as String;
+        final receiverId = data['receiverId'] as String;
+        final senderName = data['senderName'] as String;
 
-      // Update request status
-      await _firestore.collection('connection_requests').doc(requestId).update({
-        'status': status,
-        'respondedAt': FieldValue.serverTimestamp(),
+        // Get receiver name
+        final receiverDoc =
+            await _firestore.collection('users').doc(receiverId).get();
+        final receiverName = receiverDoc.data()?['name'] ?? 'Someone';
+
+        // Update request status
+        transaction.update(
+          _firestore.collection('connection_requests').doc(requestId),
+          {
+            'status': status,
+            'respondedAt': FieldValue.serverTimestamp(),
+          },
+        );
+
+        if (status == 'accepted') {
+          // Create chat for accepted connections
+          final chatId = await _chatService.getChatId(senderId, receiverId);
+
+          // Enable messaging immediately for accepted connections
+          await _chatService.checkAndEnableMessaging(senderId, receiverId);
+
+          // Create notifications for both users
+          await _notificationService.createNotification(
+            userId: senderId,
+            title: 'Connection Accepted! 🎉',
+            message: '$receiverName accepted your connection request!',
+            type: NotificationType.connection,
+            senderId: receiverId,
+            receiverId: senderId,
+            relatedId: chatId,
+          );
+
+          await _notificationService.createNotification(
+            userId: receiverId,
+            title: 'Connection Established! 🤝',
+            message: 'You are now connected with $senderName!',
+            type: NotificationType.connection,
+            senderId: senderId,
+            receiverId: receiverId,
+            relatedId: chatId,
+          );
+        }
       });
-
-      // Send notifications based on status
-      if (status == 'accepted') {
-        await _notificationService.createNotification(
-          userId: senderId,
-          title: 'Connection Accepted! 🎉',
-          message: '$receiverName accepted your connection request!',
-          type: NotificationType.connection,
-        );
-
-        // Create chat for accepted connections
-        await _chatService.createChatOnMemeLike(
-            requestId, senderId, receiverId);
-      } else if (status == 'declined') {
-        await _notificationService.createNotification(
-          userId: senderId,
-          title: 'Connection Update',
-          message: '$receiverName declined your connection request',
-          type: NotificationType.connection,
-        );
-      }
     } catch (e) {
-      throw 'Failed to handle connection request: $e';
+      print('Error handling connection request: $e');
+      rethrow;
     }
   }
 }

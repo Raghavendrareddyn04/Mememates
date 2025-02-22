@@ -193,11 +193,31 @@ class ChatService {
       final sortedIds = [user1Id, user2Id]..sort();
       final chatId = sortedIds.join('_');
 
-      await _firestore
-          .collection('chats')
-          .doc(chatId)
-          .update({'canMessage': true});
+      // First, check if the chat document exists
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+
+      if (!chatDoc.exists) {
+        // Create the chat document if it doesn't exist
+        await _firestore.collection('chats').doc(chatId).set({
+          'participants': sortedIds,
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'readBy': [],
+          'canMessage': true, // Set to true immediately
+          'createdAt': FieldValue.serverTimestamp(),
+          'active': true,
+          'lastViewed': {},
+          'expiresAt': null,
+        });
+      } else {
+        // Update existing chat document
+        await _firestore.collection('chats').doc(chatId).update({
+          'canMessage': true,
+          'active': true,
+        });
+      }
     } catch (e) {
+      print('Error enabling messaging: $e');
       throw 'Failed to enable messaging: $e';
     }
   }

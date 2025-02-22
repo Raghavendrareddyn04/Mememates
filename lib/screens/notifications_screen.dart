@@ -21,6 +21,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   bool _showFilterMenu = false;
   String _selectedFilter = 'All';
   List<AppNotification> _filteredNotifications = [];
+  bool _isProcessing = false;
 
   final List<String> _filters = [
     'All',
@@ -82,29 +83,33 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Future<void> _handleConnectionRequest(
       AppNotification notification, bool accept) async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
     try {
       // Extract request ID from the notification
-      final parts = notification.message.split(' wants to connect with you');
-      if (parts.isEmpty) return;
-
-      final senderName = parts[0];
+      final requestId = notification.relatedId;
+      if (requestId == null) throw 'Invalid request ID';
 
       // Handle the connection request
       await _memeService.handleConnectionRequest(
-        notification.id,
+        requestId,
         accept ? 'accepted' : 'declined',
       );
 
       // Mark notification as read
-      _notificationService.markAsRead(notification.id);
+      await _notificationService.markAsRead(notification.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               accept
-                  ? 'Connection request from $senderName accepted'
-                  : 'Connection request from $senderName declined',
+                  ? 'Connection request accepted'
+                  : 'Connection request declined',
             ),
             backgroundColor: accept ? Colors.green : Colors.red,
           ),
@@ -118,6 +123,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             backgroundColor: Colors.red,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
       }
     }
   }
@@ -397,7 +408,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   Widget _buildNotificationCard(
       AppNotification notification, bool isWideScreen) {
     final bool isConnectionRequest =
-        notification.message.contains('wants to connect with you');
+        notification.type == NotificationType.connection &&
+            notification.message.contains('wants to connect with you');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -469,8 +481,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                             children: [
                               if (isConnectionRequest) ...[
                                 TextButton(
-                                  onPressed: () => _handleConnectionRequest(
-                                      notification, true),
+                                  onPressed: _isProcessing
+                                      ? null
+                                      : () => _handleConnectionRequest(
+                                          notification, true),
                                   style: TextButton.styleFrom(
                                     foregroundColor: Colors.green,
                                     padding: const EdgeInsets.symmetric(
@@ -478,12 +492,25 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                                       vertical: 8,
                                     ),
                                   ),
-                                  child: const Text('Accept'),
+                                  child: _isProcessing
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.green),
+                                          ),
+                                        )
+                                      : const Text('Accept'),
                                 ),
                                 const SizedBox(width: 8),
                                 TextButton(
-                                  onPressed: () => _handleConnectionRequest(
-                                      notification, false),
+                                  onPressed: _isProcessing
+                                      ? null
+                                      : () => _handleConnectionRequest(
+                                          notification, false),
                                   style: TextButton.styleFrom(
                                     foregroundColor: Colors.red,
                                     padding: const EdgeInsets.symmetric(
@@ -491,7 +518,18 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                                       vertical: 8,
                                     ),
                                   ),
-                                  child: const Text('Decline'),
+                                  child: _isProcessing
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.red),
+                                          ),
+                                        )
+                                      : const Text('Decline'),
                                 ),
                               ] else
                                 TextButton(

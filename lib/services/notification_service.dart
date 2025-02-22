@@ -10,6 +10,7 @@ class NotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final List<AppNotification> _notifications = [];
   final _notificationControllers = <VoidCallback>[];
+  bool _isIndexError = false;
 
   NotificationService._internal() {
     _initNotificationsStream();
@@ -23,9 +24,56 @@ class NotificationService {
           .where('userId', isEqualTo: currentUser.uid)
           .orderBy('timestamp', descending: true)
           .snapshots()
-          .listen((snapshot) {
+          .listen(
+        (snapshot) {
+          _isIndexError = false;
+          _notifications.clear();
+          _notifications.addAll(snapshot.docs.map((doc) {
+            final data = doc.data();
+            final timestamp = data['timestamp'] as Timestamp?;
+            return AppNotification(
+              id: doc.id,
+              type: NotificationType.values[data['type'] as int? ?? 0],
+              title: data['title'] as String? ?? '',
+              message: data['message'] as String? ?? '',
+              timestamp: timestamp?.toDate() ?? DateTime.now(),
+              isRead: data['isRead'] as bool? ?? false,
+              relatedId: data['relatedId'] as String?,
+              senderId: data['senderId'] as String?,
+              receiverId: data['receiverId'] as String?,
+            );
+          }));
+          _notifyListeners();
+        },
+        onError: (error) {
+          if (error.toString().contains('requires an index')) {
+            _isIndexError = true;
+            print('Notification index error: $error');
+            _fallbackNotificationQuery(currentUser.uid);
+          } else {
+            print('Error in notification stream: $error');
+          }
+        },
+      );
+    }
+  }
+
+  void _fallbackNotificationQuery(String userId) {
+    _firestore
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .listen(
+      (snapshot) {
         _notifications.clear();
-        _notifications.addAll(snapshot.docs.map((doc) {
+        final docs = snapshot.docs;
+        docs.sort((a, b) {
+          final aTime = (a.data()['timestamp'] as Timestamp).toDate();
+          final bTime = (b.data()['timestamp'] as Timestamp).toDate();
+          return bTime.compareTo(aTime);
+        });
+
+        _notifications.addAll(docs.map((doc) {
           final data = doc.data();
           return AppNotification(
             id: doc.id,
@@ -33,15 +81,18 @@ class NotificationService {
             title: data['title'] as String,
             message: data['message'] as String,
             timestamp: (data['timestamp'] as Timestamp).toDate(),
-            isRead: data['isRead'] as bool,
+            isRead: data['isRead'] as bool? ?? false,
             relatedId: data['relatedId'] as String?,
             senderId: data['senderId'] as String?,
             receiverId: data['receiverId'] as String?,
           );
         }));
         _notifyListeners();
-      });
-    }
+      },
+      onError: (error) {
+        print('Error in fallback notification query: $error');
+      },
+    );
   }
 
   void addListener(VoidCallback listener) {
@@ -68,12 +119,19 @@ class NotificationService {
     String? receiverId,
   }) async {
     try {
-      // Don't create notification if user is sending to themselves
+      if (userId.isEmpty) throw 'User ID cannot be empty';
+      if (title.isEmpty) throw 'Title cannot be empty';
+      if (message.isEmpty) throw 'Message cannot be empty';
+
       if (senderId == userId) return;
 
-      // Create a unique ID for the notification
       final notificationId =
           '${DateTime.now().millisecondsSinceEpoch}_${userId}';
+
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        throw 'User not found';
+      }
 
       final notification = {
         'userId': userId,
@@ -87,13 +145,11 @@ class NotificationService {
         'receiverId': receiverId,
       };
 
-      // Use the unique ID when creating the notification
       await _firestore
           .collection('notifications')
           .doc(notificationId)
           .set(notification);
 
-      // Add to local notifications if it's for the current user
       if (userId == _auth.currentUser?.uid) {
         final localNotification = AppNotification(
           id: notificationId,
@@ -112,6 +168,7 @@ class NotificationService {
       }
     } catch (e) {
       print('Error creating notification: $e');
+      rethrow;
     }
   }
 
@@ -120,7 +177,6 @@ class NotificationService {
       final currentUser = _auth.currentUser;
       if (currentUser == null) return;
 
-      // Create notification for the matched user
       await createNotification(
         userId: userId,
         title: 'New Vibe Match! 🎉',
@@ -131,6 +187,7 @@ class NotificationService {
       );
     } catch (e) {
       print('Error handling vibe match notification: $e');
+      rethrow;
     }
   }
 
@@ -143,6 +200,13 @@ class NotificationService {
     try {
       final currentUser = _auth.currentUser;
       if (currentUser == null || currentUser.uid == memeOwnerId) return;
+
+      if (memeId != null) {
+        final memeDoc = await _firestore.collection('memes').doc(memeId).get();
+        if (!memeDoc.exists) {
+          throw 'Meme not found';
+        }
+      }
 
       await createNotification(
         userId: memeOwnerId,
@@ -157,6 +221,7 @@ class NotificationService {
       );
     } catch (e) {
       print('Error handling meme interaction notification: $e');
+      rethrow;
     }
   }
 
@@ -181,6 +246,7 @@ class NotificationService {
       );
     } catch (e) {
       print('Error handling mood board interaction notification: $e');
+      rethrow;
     }
   }
 
@@ -192,11 +258,24 @@ class NotificationService {
     required String senderId,
   }) async {
     try {
+      final requestDoc = await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .get();
+
+      if (!requestDoc.exists) {
+        throw 'Connection request not found';
+      }
+
+      final requestStatus = requestDoc.data()?['status'];
+      if (requestStatus != 'pending' && isAccepted) {
+        throw 'Connection request has already been handled';
+      }
+
       if (isAccepted) {
-        // Notify the sender that their request was accepted
         await createNotification(
           userId: senderId,
-          title: 'Connection Accepted! 🤝',
+          title: 'Connection Accepted! 🎉',
           message: '$senderName accepted your connection request!',
           type: NotificationType.connection,
           relatedId: requestId,
@@ -204,7 +283,6 @@ class NotificationService {
           receiverId: senderId,
         );
       } else {
-        // Notify the receiver about the new connection request
         await createNotification(
           userId: receiverId,
           title: 'New Connection Request! 🤝',
@@ -217,18 +295,17 @@ class NotificationService {
       }
     } catch (e) {
       print('Error handling connection request notification: $e');
+      rethrow;
     }
   }
 
   Future<void> markAsRead(String notificationId) async {
     try {
-      // Update in Firestore first
       await _firestore
           .collection('notifications')
           .doc(notificationId)
           .update({'isRead': true});
 
-      // Then update local state
       final index = _notifications.indexWhere((n) => n.id == notificationId);
       if (index != -1) {
         final updatedNotification = AppNotification(
@@ -248,6 +325,7 @@ class NotificationService {
       }
     } catch (e) {
       print('Error marking notification as read: $e');
+      rethrow;
     }
   }
 
@@ -256,7 +334,6 @@ class NotificationService {
       final currentUser = _auth.currentUser;
       if (currentUser == null) return;
 
-      // Clear from Firestore first
       final batch = _firestore.batch();
       final snapshot = await _firestore
           .collection('notifications')
@@ -268,16 +345,17 @@ class NotificationService {
       }
       await batch.commit();
 
-      // Then clear local state
       _notifications.clear();
       _notifyListeners();
     } catch (e) {
       print('Error clearing notifications: $e');
+      rethrow;
     }
   }
 
   List<AppNotification> get notifications => List.unmodifiable(_notifications);
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
+  bool get hasIndexError => _isIndexError;
 }
 
 enum NotificationType {
