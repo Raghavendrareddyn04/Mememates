@@ -13,6 +13,8 @@ class ChatMessage {
   final DateTime timestamp;
   final MessageType type;
   final bool isRead;
+  final List<String> readBy;
+  final DateTime expiresAt;
 
   ChatMessage({
     this.id,
@@ -21,7 +23,10 @@ class ChatMessage {
     required this.timestamp,
     required this.type,
     this.isRead = false,
-  });
+    List<String>? readBy,
+    DateTime? expiresAt,
+  })  : readBy = readBy ?? [],
+        expiresAt = expiresAt ?? DateTime.now().add(const Duration(days: 1));
 
   factory ChatMessage.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -32,6 +37,9 @@ class ChatMessage {
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       type: MessageType.values[data['type'] ?? 0],
       isRead: data['isRead'] ?? false,
+      readBy: List<String>.from(data['readBy'] ?? []),
+      expiresAt: (data['expiresAt'] as Timestamp?)?.toDate() ??
+          DateTime.now().add(const Duration(days: 1)),
     );
   }
 
@@ -42,6 +50,8 @@ class ChatMessage {
       'timestamp': Timestamp.fromDate(timestamp),
       'type': type.index,
       'isRead': isRead,
+      'readBy': readBy,
+      'expiresAt': Timestamp.fromDate(expiresAt),
     };
   }
 }

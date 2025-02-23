@@ -12,6 +12,259 @@ class MemeService {
   final ChatService _chatService = ChatService();
   final NotificationService _notificationService = NotificationService();
 
+  Future<String?> getConnectionRequestStatus(
+    String senderId,
+    String receiverId,
+  ) async {
+    try {
+      // Check both directions for connection requests
+      final request1 = await _firestore
+          .collection('connection_requests')
+          .doc('${senderId}_${receiverId}')
+          .get();
+
+      final request2 = await _firestore
+          .collection('connection_requests')
+          .doc('${receiverId}_${senderId}')
+          .get();
+
+      // Check connections collection for both users
+      final connection1 = await _firestore
+          .collection('users')
+          .doc(senderId)
+          .collection('connections')
+          .doc(receiverId)
+          .get();
+
+      final connection2 = await _firestore
+          .collection('users')
+          .doc(receiverId)
+          .collection('connections')
+          .doc(senderId)
+          .get();
+
+      // If there's an active connection between users
+      if (connection1.exists && connection2.exists) {
+        return 'accepted';
+      }
+
+      // Check for pending requests in either direction
+      if (request1.exists && request1.data()?['status'] == 'pending') {
+        return 'pending';
+      }
+      if (request2.exists && request2.data()?['status'] == 'pending') {
+        return 'pending';
+      }
+
+      return null;
+    } catch (e) {
+      print('Error getting connection request status: $e');
+      return null;
+    }
+  }
+
+  Future<void> sendConnectionRequest(
+    String senderId,
+    String receiverId,
+  ) async {
+    try {
+      // Check existing connection status first
+      final status = await getConnectionRequestStatus(senderId, receiverId);
+      if (status != null) {
+        throw 'Connection request already exists or users are already connected';
+      }
+
+      // Get sender's name for notification
+      final senderDoc =
+          await _firestore.collection('users').doc(senderId).get();
+      if (!senderDoc.exists) {
+        throw 'Sender not found';
+      }
+      final senderName = senderDoc.data()?['name'] ?? 'Someone';
+
+      final requestId = '${senderId}_${receiverId}';
+
+      // Create connection request
+      await _firestore.collection('connection_requests').doc(requestId).set({
+        'senderId': senderId,
+        'receiverId': receiverId,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+        'senderName': senderName,
+      });
+
+      // Send notification to receiver
+      await _notificationService.handleConnectionRequest(
+        receiverId: receiverId,
+        senderName: senderName,
+        isAccepted: false,
+        requestId: requestId,
+        senderId: senderId,
+      );
+    } catch (e) {
+      print('Error sending connection request: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> handleConnectionRequest(
+    String requestId,
+    String status,
+  ) async {
+    try {
+      // Get request data first
+      final requestDoc = await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .get();
+
+      if (!requestDoc.exists) {
+        throw 'Connection request not found';
+      }
+
+      final data = requestDoc.data()!;
+      if (data['status'] != 'pending') {
+        throw 'Request has already been handled';
+      }
+
+      final senderId = data['senderId'] as String;
+      final receiverId = data['receiverId'] as String;
+      final senderName = data['senderName'] as String;
+
+      // Get user data
+      final receiverDoc =
+          await _firestore.collection('users').doc(receiverId).get();
+      final senderDoc =
+          await _firestore.collection('users').doc(senderId).get();
+
+      if (!receiverDoc.exists || !senderDoc.exists) {
+        throw 'User data not found';
+      }
+
+      final receiverData = receiverDoc.data()!;
+      final senderData = senderDoc.data()!;
+
+      final receiverName = receiverData['name'] ?? 'Someone';
+      final receiverProfileImage = receiverData['profileImage'];
+      final senderProfileImage = senderData['profileImage'];
+
+      final batch = _firestore.batch();
+
+      // Update request status
+      batch.update(
+        _firestore.collection('connection_requests').doc(requestId),
+        {
+          'status': status,
+          'respondedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      // Also update the reverse request if it exists
+      final reverseRequestId = '${receiverId}_${senderId}';
+      final reverseRequestDoc = await _firestore
+          .collection('connection_requests')
+          .doc(reverseRequestId)
+          .get();
+
+      if (reverseRequestDoc.exists) {
+        batch.update(
+          _firestore.collection('connection_requests').doc(reverseRequestId),
+          {
+            'status': status,
+            'respondedAt': FieldValue.serverTimestamp(),
+          },
+        );
+      }
+
+      if (status == 'accepted') {
+        final now = Timestamp.now();
+
+        // Create connection for sender
+        batch.set(
+          _firestore
+              .collection('users')
+              .doc(senderId)
+              .collection('connections')
+              .doc(receiverId),
+          {
+            'userId': receiverId,
+            'userName': receiverName,
+            'profileImage': receiverProfileImage,
+            'connectedAt': now,
+            'canMessage': true,
+          },
+        );
+
+        // Create connection for receiver
+        batch.set(
+          _firestore
+              .collection('users')
+              .doc(receiverId)
+              .collection('connections')
+              .doc(senderId),
+          {
+            'userId': senderId,
+            'userName': senderName,
+            'profileImage': senderProfileImage,
+            'connectedAt': now,
+            'canMessage': true,
+          },
+        );
+
+        // Create or update chat document
+        batch.set(
+          _firestore.collection('chats').doc('${senderId}_${receiverId}'),
+          {
+            'participants': [senderId, receiverId],
+            'lastMessage': '',
+            'lastMessageTime': now,
+            'readBy': [],
+            'canMessage': true,
+            'active': true,
+            'createdAt': now,
+            'lastViewed': {},
+            'expiresAt': null,
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      // Commit all the batch operations
+      await batch.commit();
+
+      // Handle post-batch operations if request was accepted
+      if (status == 'accepted') {
+        // Create chat and enable messaging
+        final chatId = await _chatService.getChatId(senderId, receiverId);
+        await _chatService.checkAndEnableMessaging(senderId, receiverId);
+
+        // Create notifications
+        await _notificationService.createNotification(
+          userId: senderId,
+          title: 'Connection Accepted! 🎉',
+          message: '$receiverName accepted your connection request!',
+          type: NotificationType.connection,
+          senderId: receiverId,
+          receiverId: senderId,
+          relatedId: chatId,
+        );
+
+        await _notificationService.createNotification(
+          userId: receiverId,
+          title: 'Connection Established! 🤝',
+          message: 'You are now connected with $senderName!',
+          type: NotificationType.connection,
+          senderId: senderId,
+          receiverId: receiverId,
+          relatedId: chatId,
+        );
+      }
+    } catch (e) {
+      print('Error handling connection request: $e');
+      rethrow;
+    }
+  }
+
   // Post a video meme
   Future<void> postVideo({
     required String userId,
@@ -180,82 +433,68 @@ class MemeService {
     String? preferredGender,
   }) {
     return _firestore
-        .collection('users')
-        .doc(userId)
+        .collection('memes')
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .asyncMap((userDoc) async {
-      if (!userDoc.exists) return [];
+        .asyncMap((snapshot) async {
+      final List<MemePost> memes = [];
+      final userDoc = await _firestore.collection('users').doc(userId).get();
 
-      // Get user's liked and passed memes from their document
+      // Get user's liked and passed memes
       final likedMemeIds =
           List<String>.from(userDoc.data()?['likedMemes'] ?? []);
       final passedMemeIds =
           List<String>.from(userDoc.data()?['passedMemes'] ?? []);
 
-      // Query memes excluding user's own memes and liked/passed memes
-      final memesQuery = await _firestore
-          .collection('memes')
-          .where('userId', isNotEqualTo: userId)
-          .orderBy('userId')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      final memes = <MemePost>[];
-
-      for (var doc in memesQuery.docs) {
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
         final memeId = doc.id;
+        final postUserId = data['userId'] as String;
 
-        // Skip if already liked or passed
-        if (likedMemeIds.contains(memeId) || passedMemeIds.contains(memeId)) {
+        // Skip if it's the user's own meme or if they've already interacted with it
+        if (postUserId == userId ||
+            likedMemeIds.contains(memeId) ||
+            passedMemeIds.contains(memeId)) {
           continue;
         }
-
-        final data = doc.data();
-        final postUserId = data['userId'] as String;
 
         // Get poster's profile for filtering
         final posterDoc =
             await _firestore.collection('users').doc(postUserId).get();
-        final posterData = posterDoc.data();
+        if (!posterDoc.exists) continue;
 
-        if (posterData != null) {
-          final posterAge = posterData['age'] as int?;
-          final posterGender = posterData['gender'] as String?;
+        final posterData = posterDoc.data()!;
+        final posterAge = posterData['age'] as int?;
+        final posterGender = posterData['gender'] as String?;
 
-          // Apply age and gender filters
-          if (minAge != null &&
-              maxAge != null &&
-              posterAge != null &&
-              (posterAge < minAge || posterAge > maxAge)) {
-            continue;
-          }
-
-          if (preferredGender != null &&
-              preferredGender != 'All' &&
-              posterGender != preferredGender) {
-            continue;
-          }
-
-          memes.add(MemePost(
-            id: memeId,
-            userId: postUserId,
-            userName: data['userName'] ?? '',
-            memeUrl: data['memeUrl'] ?? '',
-            caption: data['caption'] ?? '',
-            videoId: data['songUrl'],
-            videoTitle: data['songTitle'],
-            artistName: data['artistName'],
-            createdAt:
-                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
-            passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
-            userProfileImage: posterData['profileImage'],
-          ));
+        // Apply age and gender filters if specified
+        if (minAge != null && maxAge != null && posterAge != null) {
+          if (posterAge < minAge || posterAge > maxAge) continue;
         }
+
+        if (preferredGender != null &&
+            preferredGender != 'All' &&
+            posterGender != preferredGender) {
+          continue;
+        }
+
+        memes.add(MemePost(
+          id: memeId,
+          userId: postUserId,
+          userName: data['userName'] ?? '',
+          memeUrl: data['memeUrl'] ?? '',
+          caption: data['caption'] ?? '',
+          videoId: data['videoId'],
+          videoTitle: data['videoTitle'],
+          artistName: data['artistName'],
+          createdAt:
+              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
+          passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
+          userProfileImage: data['userProfileImage'],
+        ));
       }
 
-      // Sort memes by creation date, newest first
-      memes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return memes;
     });
   }
@@ -406,8 +645,8 @@ class MemeService {
                 userName: data['userName'] ?? '',
                 memeUrl: data['memeUrl'] ?? '',
                 caption: data['caption'] ?? '',
-                videoId: data['songUrl'],
-                videoTitle: data['songTitle'],
+                videoId: data['videoId'],
+                videoTitle: data['videoTitle'],
                 artistName: data['artistName'],
                 createdAt: (data['createdAt'] as Timestamp?)?.toDate() ??
                     DateTime.now(),
@@ -436,8 +675,8 @@ class MemeService {
             userName: data['userName'] ?? '',
             memeUrl: data['memeUrl'] ?? '',
             caption: data['caption'] ?? '',
-            videoId: data['songUrl'],
-            videoTitle: data['songTitle'],
+            videoId: data['videoId'],
+            videoTitle: data['videoTitle'],
             artistName: data['artistName'],
             createdAt:
                 (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -603,201 +842,6 @@ class MemeService {
       );
     } catch (e) {
       print('Error handling mood board interaction: $e');
-    }
-  }
-
-  Future<String?> getConnectionRequestStatus(
-    String senderId,
-    String receiverId,
-  ) async {
-    try {
-      final requestDoc = await _firestore
-          .collection('connection_requests')
-          .doc('${senderId}_${receiverId}')
-          .get();
-
-      if (requestDoc.exists) {
-        return requestDoc.data()?['status'] as String;
-      }
-      return null;
-    } catch (e) {
-      print('Error getting connection request status: $e');
-      return null;
-    }
-  }
-
-  Future<void> sendConnectionRequest(
-    String senderId,
-    String receiverId,
-  ) async {
-    try {
-      // Get sender's name for notification
-      final senderDoc =
-          await _firestore.collection('users').doc(senderId).get();
-      if (!senderDoc.exists) {
-        throw 'Sender not found';
-      }
-      final senderName = senderDoc.data()?['name'] ?? 'Someone';
-
-      final requestId = '${senderId}_${receiverId}';
-
-      // Use transaction to ensure atomic operations
-      await _firestore.runTransaction((transaction) async {
-        // Check if request already exists
-        final existingRequest = await transaction.get(
-          _firestore.collection('connection_requests').doc(requestId),
-        );
-
-        if (existingRequest.exists) {
-          throw 'Connection request already exists';
-        }
-
-        // Create connection request
-        transaction.set(
-          _firestore.collection('connection_requests').doc(requestId),
-          {
-            'senderId': senderId,
-            'receiverId': receiverId,
-            'status': 'pending',
-            'timestamp': FieldValue.serverTimestamp(),
-            'senderName': senderName, // Add sender name to request
-          },
-        );
-      });
-
-      // Send notification to receiver
-      await _notificationService.handleConnectionRequest(
-        receiverId: receiverId,
-        senderName: senderName,
-        isAccepted: false,
-        requestId: requestId,
-        senderId: senderId,
-      );
-    } catch (e) {
-      print('Error sending connection request: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> handleConnectionRequest(
-    String requestId,
-    String status,
-  ) async {
-    try {
-      // Get request data first
-      final requestDoc = await _firestore
-          .collection('connection_requests')
-          .doc(requestId)
-          .get();
-
-      if (!requestDoc.exists) {
-        throw 'Connection request not found';
-      }
-
-      final data = requestDoc.data()!;
-      if (data['status'] != 'pending') {
-        throw 'Request has already been handled';
-      }
-
-      final senderId = data['senderId'] as String;
-      final receiverId = data['receiverId'] as String;
-      final senderName = data['senderName'] as String;
-
-      // Get user data outside transaction
-      final receiverDoc =
-          await _firestore.collection('users').doc(receiverId).get();
-      final senderDoc =
-          await _firestore.collection('users').doc(senderId).get();
-
-      if (!receiverDoc.exists || !senderDoc.exists) {
-        throw 'User data not found';
-      }
-
-      final receiverData = receiverDoc.data()!;
-      final senderData = senderDoc.data()!;
-
-      final receiverName = receiverData['name'] ?? 'Someone';
-      final receiverProfileImage = receiverData['profileImage'];
-      final senderProfileImage = senderData['profileImage'];
-
-      // Start transaction
-      await _firestore.runTransaction((transaction) async {
-        // Update request status
-        transaction.update(
-          _firestore.collection('connection_requests').doc(requestId),
-          {
-            'status': status,
-            'respondedAt': FieldValue.serverTimestamp(),
-          },
-        );
-
-        if (status == 'accepted') {
-          final now = Timestamp.now();
-
-          // Create connection for sender
-          transaction.set(
-            _firestore
-                .collection('users')
-                .doc(senderId)
-                .collection('connections')
-                .doc(receiverId),
-            {
-              'userId': receiverId,
-              'userName': receiverName,
-              'profileImage': receiverProfileImage,
-              'connectedAt': now,
-            },
-          );
-
-          // Create connection for receiver
-          transaction.set(
-            _firestore
-                .collection('users')
-                .doc(receiverId)
-                .collection('connections')
-                .doc(senderId),
-            {
-              'userId': senderId,
-              'userName': senderName,
-              'profileImage': senderProfileImage,
-              'connectedAt': now,
-            },
-          );
-        }
-      });
-
-      // Handle post-transaction operations
-      if (status == 'accepted') {
-        // Create chat for accepted connections
-        final chatId = await _chatService.getChatId(senderId, receiverId);
-
-        // Enable messaging
-        await _chatService.checkAndEnableMessaging(senderId, receiverId);
-
-        // Create notifications
-        await _notificationService.createNotification(
-          userId: senderId,
-          title: 'Connection Accepted! 🎉',
-          message: '$receiverName accepted your connection request!',
-          type: NotificationType.connection,
-          senderId: receiverId,
-          receiverId: senderId,
-          relatedId: chatId,
-        );
-
-        await _notificationService.createNotification(
-          userId: receiverId,
-          title: 'Connection Established! 🤝',
-          message: 'You are now connected with $senderName!',
-          type: NotificationType.connection,
-          senderId: senderId,
-          receiverId: receiverId,
-          relatedId: chatId,
-        );
-      }
-    } catch (e) {
-      print('Error handling connection request: $e');
-      rethrow;
     }
   }
 

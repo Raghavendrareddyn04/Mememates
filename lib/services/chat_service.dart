@@ -82,12 +82,29 @@ class ChatService {
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
 
       if (!chatDoc.exists) {
+        // Check if users are connected
+        final connection1 = await _firestore
+            .collection('users')
+            .doc(userId1)
+            .collection('connections')
+            .doc(userId2)
+            .get();
+
+        final connection2 = await _firestore
+            .collection('users')
+            .doc(userId2)
+            .collection('connections')
+            .doc(userId1)
+            .get();
+
+        final canMessage = connection1.exists && connection2.exists;
+
         await _firestore.collection('chats').doc(chatId).set({
           'participants': sortedIds,
           'lastMessage': '',
           'lastMessageTime': FieldValue.serverTimestamp(),
           'readBy': [],
-          'canMessage': false,
+          'canMessage': canMessage,
           'createdAt': FieldValue.serverTimestamp(),
           'active': true,
           'lastViewed': {},
@@ -193,29 +210,52 @@ class ChatService {
       final sortedIds = [user1Id, user2Id]..sort();
       final chatId = sortedIds.join('_');
 
-      // First, check if the chat document exists
-      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      // Check if users are connected
+      final connection1 = await _firestore
+          .collection('users')
+          .doc(user1Id)
+          .collection('connections')
+          .doc(user2Id)
+          .get();
 
-      if (!chatDoc.exists) {
-        // Create the chat document if it doesn't exist
-        await _firestore.collection('chats').doc(chatId).set({
-          'participants': sortedIds,
-          'lastMessage': '',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'readBy': [],
-          'canMessage': true, // Set to true immediately
-          'createdAt': FieldValue.serverTimestamp(),
-          'active': true,
-          'lastViewed': {},
-          'expiresAt': null,
-        });
-      } else {
-        // Update existing chat document
-        await _firestore.collection('chats').doc(chatId).update({
-          'canMessage': true,
-          'active': true,
-        });
+      final connection2 = await _firestore
+          .collection('users')
+          .doc(user2Id)
+          .collection('connections')
+          .doc(user1Id)
+          .get();
+
+      if (!connection1.exists || !connection2.exists) {
+        throw 'Users are not connected';
       }
+
+      // Update or create chat document
+      await _firestore.collection('chats').doc(chatId).set({
+        'participants': sortedIds,
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'readBy': [],
+        'canMessage': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'active': true,
+        'lastViewed': {},
+        'expiresAt': null,
+      }, SetOptions(merge: true));
+
+      // Update connection documents
+      await _firestore
+          .collection('users')
+          .doc(user1Id)
+          .collection('connections')
+          .doc(user2Id)
+          .update({'canMessage': true});
+
+      await _firestore
+          .collection('users')
+          .doc(user2Id)
+          .collection('connections')
+          .doc(user1Id)
+          .update({'canMessage': true});
     } catch (e) {
       print('Error enabling messaging: $e');
       throw 'Failed to enable messaging: $e';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_auth/widgets/audius_player.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../models/user_profile.dart';
 import '../models/meme_post.dart';
@@ -27,6 +28,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _chatService = ChatService();
   final _memeService = MemeService();
   final _authService = AuthService();
+  final _firestore = FirebaseFirestore.instance;
   bool _canChat = false;
   bool _isLoading = true;
   String? _chatId;
@@ -80,10 +82,38 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final currentUser = _authService.currentUser;
       if (currentUser != null) {
-        _chatId = await _chatService.getChatId(
-            currentUser.uid, widget.profile.userId);
-        await _checkChatPermission();
-        _startCleanupTimer();
+        // First check if users are connected
+        final connection1 = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('connections')
+            .doc(widget.profile.userId)
+            .get();
+
+        final connection2 = await _firestore
+            .collection('users')
+            .doc(widget.profile.userId)
+            .collection('connections')
+            .doc(currentUser.uid)
+            .get();
+
+        final areConnected = connection1.exists && connection2.exists;
+        final canMessage = connection1.data()?['canMessage'] == true &&
+            connection2.data()?['canMessage'] == true;
+
+        setState(() {
+          _canChat = areConnected && canMessage;
+        });
+
+        if (_canChat) {
+          _chatId = await _chatService.getChatId(
+              currentUser.uid, widget.profile.userId);
+          await _chatService.markChatAsRead(
+            chatId: _chatId!,
+            userId: currentUser.uid,
+          );
+          _startCleanupTimer();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -102,39 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _expirationTimer = Timer.periodic(const Duration(hours: 1), (timer) {
       _chatService.cleanupExpiredMessages();
     });
-  }
-
-  Future<void> _checkChatPermission() async {
-    try {
-      final currentUser = _authService.currentUser;
-      if (currentUser != null) {
-        final otherUserLikedMyMeme = await _memeService.hasUserLikedMyMeme(
-          currentUser.uid,
-          widget.profile.userId,
-        );
-        final iLikedOtherUserMeme = await _memeService.hasUserLikedMyMeme(
-          widget.profile.userId,
-          currentUser.uid,
-        );
-
-        setState(() {
-          _canChat = otherUserLikedMyMeme && iLikedOtherUserMeme;
-        });
-
-        if (_canChat && _chatId != null) {
-          await _chatService.markChatAsRead(
-            chatId: _chatId!,
-            userId: currentUser.uid,
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error checking chat permission: $e')),
-        );
-      }
-    }
   }
 
   void _handleProfileTap() {
@@ -333,7 +330,7 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: _sendMessage,
               backgroundColor: Colors.pink,
               child: const Icon(Icons.send),
-              heroTag: 'chat_send_button', // Add unique hero tag
+              heroTag: 'chat_send_button',
             )
           : FloatingActionButton(
               onPressed: () {
@@ -341,7 +338,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               backgroundColor: Colors.white.withOpacity(0.1),
               child: const Icon(Icons.mic),
-              heroTag: 'chat_mic_button', // Add unique hero tag
+              heroTag: 'chat_mic_button',
             ),
     );
   }
@@ -416,7 +413,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!snapshot.hasData) {
           return const Center(
             child: LoadingAnimation(
-              message: "LOading your chat...",
+              message: "Loading your chat...",
             ),
           );
         }
