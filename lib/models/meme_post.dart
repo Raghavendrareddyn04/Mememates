@@ -15,8 +15,7 @@ class MemePost {
   final DateTime createdAt;
   List<String> likedByUsers;
   List<String> passedByUsers;
-  List<String>
-      temporarilyPassedUsers; // New list to track temporarily passed users
+  List<String> temporarilyPassedUsers;
   final String? userProfileImage;
   bool _isReverted = false;
   final _memeService = MemeService();
@@ -43,6 +42,9 @@ class MemePost {
         temporarilyPassedUsers = temporarilyPassedUsers ?? [];
 
   bool get isReverted => _isReverted;
+
+  // Add a getter to determine if the meme is a video
+  bool get isVideo => memeUrl.toLowerCase().endsWith('.mp4');
 
   bool isTemporarilyPassed(String userId) =>
       temporarilyPassedUsers.contains(userId);
@@ -91,7 +93,7 @@ class MemePost {
   void like(String userId) {
     if (!isLikedBy(userId) && !isPassedBy(userId)) {
       likedByUsers.add(userId);
-      temporarilyPassedUsers.remove(userId); // Clear temporary pass on like
+      temporarilyPassedUsers.remove(userId);
       _isReverted = false;
     }
   }
@@ -99,8 +101,7 @@ class MemePost {
   void pass(String userId) {
     if (!isPassedBy(userId) && !isLikedBy(userId)) {
       passedByUsers.add(userId);
-      temporarilyPassedUsers
-          .remove(userId); // Clear temporary pass on permanent pass
+      temporarilyPassedUsers.remove(userId);
       _isReverted = false;
     }
   }
@@ -108,8 +109,7 @@ class MemePost {
   void temporaryPass(String userId) {
     if (!isPassedBy(userId) && !isLikedBy(userId)) {
       temporarilyPassedUsers.add(userId);
-      passedByUsers
-          .remove(userId); // Remove from permanent pass list if present
+      passedByUsers.remove(userId);
     }
   }
 

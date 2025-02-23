@@ -19,6 +19,7 @@ import 'vibe_match_screen.dart';
 import 'meme_creator_screen.dart';
 import 'discovery_screen.dart';
 import 'dart:math';
+import 'package:flutter_auth/screens/leaderboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -885,7 +886,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.tune,
+                              Icons.dashboard_customize,
                               color: _showPreferences
                                   ? Colors.pink
                                   : const Color.fromARGB(241, 242, 245, 245),
@@ -927,8 +928,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
               actions: [
+                // Leaderboard Button
+                IconButton(
+                  icon: const Icon(Icons.leaderboard, color: Colors.deepOrange),
+                  tooltip: 'View Leaderboard',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LeaderboardScreen(),
+                      ),
+                    );
+                  },
+                ),
+
                 IconButton(
                   icon: const Icon(Icons.favorite, color: Colors.white),
+                  tooltip: 'Vibe Match',
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -938,25 +954,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     );
                   },
                 ),
+
                 IconButton(
                   icon: NotificationBadge(
                     child: const Icon(Icons.notifications, color: Colors.red),
                   ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationsScreen(),
-                    ),
-                  ),
+                  tooltip: 'Notifications',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
                 ),
+
                 IconButton(
                   icon: const Icon(Icons.diamond, color: Colors.amber),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PremiumScreen(),
-                    ),
-                  ),
+                  tooltip: 'Premium Access',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PremiumScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             )

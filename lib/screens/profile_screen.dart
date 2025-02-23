@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_auth/screens/connections_screen.dart';
 import 'package:flutter_auth/screens/mood_board_upload_screen.dart';
 import 'package:flutter_auth/services/meme_service.dart';
 import 'package:flutter_auth/services/user_service.dart';
@@ -9,6 +10,7 @@ import '../models/meme_post.dart';
 import 'profile_edit_screen.dart';
 import 'settings_screen.dart';
 import 'mood_board_editor_screen.dart';
+import 'package:flutter_auth/widgets/meme_media.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -27,11 +29,13 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<MemePost> _likedMemes = [];
   int _postedMemesCount = 0;
   int _likedMemesCount = 0;
+  int _connectionsCount = 0;
   bool _showPostedMemes = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _scaleAnimation;
+  bool _mounted = true;
 
   @override
   void initState() {
@@ -74,12 +78,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _loadUserProfile() async {
-    setState(() => _isLoading = true);
+    if (!_mounted) return;
     try {
+      setState(() => _isLoading = true);
       final currentUser = _userService.currentUser;
       if (currentUser != null) {
         final profile = await _userService.getUserProfile(currentUser.uid);
-        if (profile != null) {
+
+        final connections =
+            await _userService.getUserConnections(currentUser.uid).first;
+
+        if (profile != null && _mounted) {
           setState(() {
             _userProfile = {
               'name': profile.name,
@@ -92,23 +101,25 @@ class _ProfileScreenState extends State<ProfileScreen>
               'artistName': profile.artistName,
               'interests': profile.interests ?? [],
             };
+            _connectionsCount = connections.length;
           });
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (_mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading profile: $e')),
         );
       }
     } finally {
-      if (mounted) {
+      if (_mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> _loadMemeCounts() async {
+    if (!_mounted) return;
     try {
       final currentUser = _userService.currentUser;
       if (currentUser != null) {
@@ -116,42 +127,62 @@ class _ProfileScreenState extends State<ProfileScreen>
             await _memeService.getUserMemes(currentUser.uid).first;
         final likedMemes = await _memeService.getLikedMemes(currentUser.uid);
 
-        setState(() {
-          _postedMemesCount = postedMemes.length;
-          _likedMemesCount = likedMemes.length;
-        });
+        if (_mounted) {
+          setState(() {
+            _postedMemesCount = postedMemes.length;
+            _likedMemesCount = likedMemes.length;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading meme counts: $e');
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading meme counts: $e')),
+        );
+      }
     }
   }
 
   Future<void> _loadStreakInfo() async {
+    if (!_mounted) return;
     try {
       final currentUser = _userService.currentUser;
       if (currentUser != null) {
         final streakInfo =
             await _memeService.getUserStreakInfo(currentUser.uid);
-        setState(() {
-          _streakInfo = streakInfo;
-        });
+        if (_mounted) {
+          setState(() {
+            _streakInfo = streakInfo;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading streak info: $e');
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading streak info: $e')),
+        );
+      }
     }
   }
 
   Future<void> _loadLikedMemes() async {
+    if (!_mounted) return;
     try {
       final currentUser = _userService.currentUser;
       if (currentUser != null) {
         final likedMemes = await _memeService.getLikedMemes(currentUser.uid);
-        setState(() {
-          _likedMemes = likedMemes;
-        });
+        if (_mounted) {
+          setState(() {
+            _likedMemes = likedMemes;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading liked memes: $e');
+      if (_mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading liked memes: $e')),
+        );
+      }
     }
   }
 
@@ -638,33 +669,61 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ),
           const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem(
-                icon: Icons.post_add,
-                value: _postedMemesCount.toString(),
-                label: 'Posts',
-                color: Colors.green,
-                onTap: () => setState(() => _showPostedMemes = true),
-                isSelected: _showPostedMemes,
-              ),
-              _buildStatItem(
-                icon: Icons.favorite,
-                value: _likedMemesCount.toString(),
-                label: 'Likes',
-                color: Colors.pink,
-                onTap: () => setState(() => _showPostedMemes = false),
-                isSelected: !_showPostedMemes,
-              ),
-              if (_streakInfo != null)
-                _buildStatItem(
-                  icon: Icons.local_fire_department,
-                  value: _streakInfo!['streak'].toString(),
-                  label: 'Streak',
-                  color: Colors.orange,
-                ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      icon: Icons.post_add,
+                      value: _postedMemesCount.toString(),
+                      label: 'Posts',
+                      color: Colors.green,
+                      onTap: () => setState(() => _showPostedMemes = true),
+                      isSelected: _showPostedMemes,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatItem(
+                      icon: Icons.favorite,
+                      value: _likedMemesCount.toString(),
+                      label: 'Likes',
+                      color: Colors.pink,
+                      onTap: () => setState(() => _showPostedMemes = false),
+                      isSelected: !_showPostedMemes,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatItem(
+                      icon: Icons.people,
+                      value: _connectionsCount.toString(),
+                      label: 'Connections',
+                      color: Colors.blue,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ConnectionsScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_streakInfo != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.local_fire_department,
+                        value: _streakInfo!['streak'].toString(),
+                        label: 'Streak',
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -682,12 +741,13 @@ class _ProfileScreenState extends State<ProfileScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.all(12),
@@ -695,22 +755,29 @@ class _ProfileScreenState extends State<ProfileScreen>
                 color: color.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color),
+              child: Icon(icon, color: color, size: 22),
             ),
             const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 14,
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
@@ -970,22 +1037,23 @@ class _ProfileScreenState extends State<ProfileScreen>
               itemCount:
                   (_userProfile?['moodBoardImages'] as List?)?.length ?? 0,
               itemBuilder: (context, index) {
-                final images =
-                    List<String>.from(_userProfile?['moodBoardImages'] ?? []);
-                return Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    image: DecorationImage(
-                      image: NetworkImage(images[index]),
-                      fit: BoxFit.cover,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                final imageUrl =
+                    (_userProfile?['moodBoardImages'] as List)[index];
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[900],
+                        child: Icon(
+                          Icons.error_outline,
+                          color: Colors.white.withOpacity(0.5),
+                          size: 32,
+                        ),
+                      );
+                    },
                   ),
                 );
               },
@@ -1089,96 +1157,96 @@ class _ProfileScreenState extends State<ProfileScreen>
         childAspectRatio: 0.8,
       ),
       itemCount: memes.length,
-      itemBuilder: (context, index) => _buildMemeCard(memes[index]),
-    );
-  }
-
-  Widget _buildMemeCard(MemePost meme) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              meme.memeUrl,
-              fit: BoxFit.cover,
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                ),
+      itemBuilder: (context, index) {
+        final meme = memes[index];
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
               ),
-            ),
-            Positioned(
-              bottom: 12,
-              left: 12,
-              right: 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    meme.caption,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (meme.videoId != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.music_note,
-                          color: Colors.white,
-                          size: 12,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            meme.videoTitle!,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                MemeMedia(
+                  url: meme.memeUrl,
+                  isVideo: meme.isVideo,
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
                       ],
                     ),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 12,
+                  left: 12,
+                  right: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        meme.caption,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (meme.videoId != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.music_note,
+                              color: Colors.white,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                meme.videoTitle!,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   @override
   void dispose() {
+    _mounted = false;
     _animationController.dispose();
     super.dispose();
   }

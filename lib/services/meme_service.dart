@@ -684,29 +684,44 @@ class MemeService {
     String status,
   ) async {
     try {
+      // Get request data first
+      final requestDoc = await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .get();
+
+      if (!requestDoc.exists) {
+        throw 'Connection request not found';
+      }
+
+      final data = requestDoc.data()!;
+      if (data['status'] != 'pending') {
+        throw 'Request has already been handled';
+      }
+
+      final senderId = data['senderId'] as String;
+      final receiverId = data['receiverId'] as String;
+      final senderName = data['senderName'] as String;
+
+      // Get user data outside transaction
+      final receiverDoc =
+          await _firestore.collection('users').doc(receiverId).get();
+      final senderDoc =
+          await _firestore.collection('users').doc(senderId).get();
+
+      if (!receiverDoc.exists || !senderDoc.exists) {
+        throw 'User data not found';
+      }
+
+      final receiverData = receiverDoc.data()!;
+      final senderData = senderDoc.data()!;
+
+      final receiverName = receiverData['name'] ?? 'Someone';
+      final receiverProfileImage = receiverData['profileImage'];
+      final senderProfileImage = senderData['profileImage'];
+
+      // Start transaction
       await _firestore.runTransaction((transaction) async {
-        final requestDoc = await transaction.get(
-          _firestore.collection('connection_requests').doc(requestId),
-        );
-
-        if (!requestDoc.exists) {
-          throw 'Connection request not found';
-        }
-
-        final data = requestDoc.data()!;
-        if (data['status'] != 'pending') {
-          throw 'Request has already been handled';
-        }
-
-        final senderId = data['senderId'] as String;
-        final receiverId = data['receiverId'] as String;
-        final senderName = data['senderName'] as String;
-
-        // Get receiver name
-        final receiverDoc =
-            await _firestore.collection('users').doc(receiverId).get();
-        final receiverName = receiverDoc.data()?['name'] ?? 'Someone';
-
         // Update request status
         transaction.update(
           _firestore.collection('connection_requests').doc(requestId),
@@ -717,37 +732,110 @@ class MemeService {
         );
 
         if (status == 'accepted') {
-          // Create chat for accepted connections
-          final chatId = await _chatService.getChatId(senderId, receiverId);
+          final now = Timestamp.now();
 
-          // Enable messaging immediately for accepted connections
-          await _chatService.checkAndEnableMessaging(senderId, receiverId);
-
-          // Create notifications for both users
-          await _notificationService.createNotification(
-            userId: senderId,
-            title: 'Connection Accepted! 🎉',
-            message: '$receiverName accepted your connection request!',
-            type: NotificationType.connection,
-            senderId: receiverId,
-            receiverId: senderId,
-            relatedId: chatId,
+          // Create connection for sender
+          transaction.set(
+            _firestore
+                .collection('users')
+                .doc(senderId)
+                .collection('connections')
+                .doc(receiverId),
+            {
+              'userId': receiverId,
+              'userName': receiverName,
+              'profileImage': receiverProfileImage,
+              'connectedAt': now,
+            },
           );
 
-          await _notificationService.createNotification(
-            userId: receiverId,
-            title: 'Connection Established! 🤝',
-            message: 'You are now connected with $senderName!',
-            type: NotificationType.connection,
-            senderId: senderId,
-            receiverId: receiverId,
-            relatedId: chatId,
+          // Create connection for receiver
+          transaction.set(
+            _firestore
+                .collection('users')
+                .doc(receiverId)
+                .collection('connections')
+                .doc(senderId),
+            {
+              'userId': senderId,
+              'userName': senderName,
+              'profileImage': senderProfileImage,
+              'connectedAt': now,
+            },
           );
         }
       });
+
+      // Handle post-transaction operations
+      if (status == 'accepted') {
+        // Create chat for accepted connections
+        final chatId = await _chatService.getChatId(senderId, receiverId);
+
+        // Enable messaging
+        await _chatService.checkAndEnableMessaging(senderId, receiverId);
+
+        // Create notifications
+        await _notificationService.createNotification(
+          userId: senderId,
+          title: 'Connection Accepted! 🎉',
+          message: '$receiverName accepted your connection request!',
+          type: NotificationType.connection,
+          senderId: receiverId,
+          receiverId: senderId,
+          relatedId: chatId,
+        );
+
+        await _notificationService.createNotification(
+          userId: receiverId,
+          title: 'Connection Established! 🤝',
+          message: 'You are now connected with $senderName!',
+          type: NotificationType.connection,
+          senderId: senderId,
+          receiverId: receiverId,
+          relatedId: chatId,
+        );
+      }
     } catch (e) {
       print('Error handling connection request: $e');
       rethrow;
+    }
+  }
+
+  // Get top 10 memes by likes
+  Future<List<MemePost>> getTopMemes() async {
+    try {
+      final querySnapshot = await _firestore.collection('memes').get();
+
+      // Convert all documents to MemePost objects with user data
+      final memes = await Future.wait(querySnapshot.docs.map((doc) async {
+        final data = doc.data();
+        final userDoc =
+            await _firestore.collection('users').doc(data['userId']).get();
+        final userData = userDoc.data();
+
+        return MemePost(
+          id: doc.id,
+          userId: data['userId'],
+          userName: data['userName'] ?? '',
+          memeUrl: data['memeUrl'] ?? '',
+          caption: data['caption'] ?? '',
+          videoId: data['videoId'],
+          videoTitle: data['videoTitle'],
+          artistName: data['artistName'],
+          createdAt:
+              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          likedByUsers: List<String>.from(data['likedByUsers'] ?? []),
+          passedByUsers: List<String>.from(data['passedByUsers'] ?? []),
+          userProfileImage: userData?['profileImage'],
+        );
+      }));
+
+      // Sort by number of likes (descending) and take top 10
+      memes.sort(
+          (a, b) => b.likedByUsers.length.compareTo(a.likedByUsers.length));
+      return memes.take(10).toList();
+    } catch (e) {
+      throw 'Failed to get top memes: $e';
     }
   }
 }

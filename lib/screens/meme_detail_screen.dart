@@ -31,6 +31,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
   bool _isLoading = true;
   bool _isLiked = false;
   bool _isPassed = false;
+  String? _connectionStatus;
 
   late AnimationController _animationController;
 
@@ -58,6 +59,10 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
         final profile = await _userService.getUserProfile(widget.meme.userId);
         final streakInfo =
             await _memeService.getUserStreakInfo(widget.meme.userId);
+        final status = await _memeService.getConnectionRequestStatus(
+          currentUser.uid,
+          widget.meme.userId,
+        );
 
         setState(() {
           _posterProfile = {
@@ -74,6 +79,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
           _streakInfo = streakInfo;
           _isLiked = widget.meme.isLikedBy(currentUser.uid);
           _isPassed = widget.meme.isPassedBy(currentUser.uid);
+          _connectionStatus = status;
           _isLoading = false;
         });
 
@@ -330,6 +336,40 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
     );
   }
 
+  Future<void> _sendConnectionRequest() async {
+    try {
+      final currentUser = _userService.currentUser;
+      if (currentUser == null) return;
+
+      await _memeService.sendConnectionRequest(
+        currentUser.uid,
+        widget.meme.userId,
+      );
+
+      setState(() {
+        _connectionStatus = 'pending';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connection request sent to ${widget.meme.userName}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _navigateToChat() async {
     if (_posterProfile == null) return;
 
@@ -387,19 +427,6 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
-            IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.share, color: Colors.white),
-              ),
-              onPressed: () {
-                // Implement share functionality
-              },
-            ),
             IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),
@@ -616,14 +643,7 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
                     color: Colors.blue,
                     onTap: _navigateToChat,
                   ),
-                  _buildActionButton(
-                    icon: Icons.share_outlined,
-                    label: 'Share',
-                    color: Colors.green,
-                    onTap: () {
-                      // Implement share functionality
-                    },
-                  ),
+                  _buildConnectionButton(),
                 ],
               ),
             ],
@@ -631,6 +651,36 @@ class _MemeDetailScreenState extends State<MemeDetailScreen>
         ),
       ],
     );
+  }
+
+  Widget _buildConnectionButton() {
+    final currentUser = _userService.currentUser;
+    if (currentUser == null || currentUser.uid == widget.meme.userId) {
+      return const SizedBox.shrink();
+    }
+
+    if (_connectionStatus == 'accepted') {
+      return _buildActionButton(
+        icon: Icons.check_circle,
+        label: 'Connected',
+        color: Colors.green,
+        onTap: null,
+      );
+    } else if (_connectionStatus == 'pending') {
+      return _buildActionButton(
+        icon: Icons.pending,
+        label: 'Pending',
+        color: Colors.amber,
+        onTap: null,
+      );
+    } else {
+      return _buildActionButton(
+        icon: Icons.person_add,
+        label: 'Connect',
+        color: Colors.pink,
+        onTap: _sendConnectionRequest,
+      );
+    }
   }
 
   Widget _buildActionButton({

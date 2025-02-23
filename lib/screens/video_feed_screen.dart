@@ -37,7 +37,6 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
         _memeService.getMemesFeed(currentUser.uid).listen((memes) {
           if (mounted) {
             setState(() {
-              // Filter for video memes using the isVideo field
               _videos = memes
                   .where((meme) => meme.memeUrl.contains('/video/'))
                   .toList();
@@ -88,11 +87,9 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
     if (index < _videos.length) {
       _initializeVideo(_videos[index]);
 
-      // Pause previous video
       if (index > 0 && _chewieControllers[_videos[index - 1].id] != null) {
         _chewieControllers[_videos[index - 1].id]!.pause();
       }
-      // Pause next video
       if (index < _videos.length - 1 &&
           _chewieControllers[_videos[index + 1].id] != null) {
         _chewieControllers[_videos[index + 1].id]!.pause();
@@ -107,6 +104,40 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _handleLike(MemePost video) async {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) return;
+
+      setState(() {
+        if (video.likedByUsers.contains(currentUser.uid)) {
+          video.likedByUsers.remove(currentUser.uid);
+        } else {
+          video.likedByUsers.add(currentUser.uid);
+        }
+      });
+
+      await _memeService.likeMeme(video.id, currentUser.uid);
+    } catch (e) {
+      setState(() {
+        final currentUser = _authService.currentUser;
+        if (currentUser != null) {
+          if (video.likedByUsers.contains(currentUser.uid)) {
+            video.likedByUsers.remove(currentUser.uid);
+          } else {
+            video.likedByUsers.add(currentUser.uid);
+          }
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error liking video: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -190,6 +221,9 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
   }
 
   Widget _buildOverlay(MemePost video) {
+    final currentUser = _authService.currentUser;
+    final isLiked = video.likedByUsers.contains(currentUser?.uid);
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -202,90 +236,89 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
           ],
         ),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+      child: SafeArea(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 50.0, right: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Column(
                     children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundImage: video.userProfileImage != null
-                                ? NetworkImage(video.userProfileImage!)
-                                : null,
-                            child: video.userProfileImage == null
-                                ? Text(video.userName[0].toUpperCase())
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            video.userName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                      _buildActionButton(
+                        icon: Icons.favorite,
+                        label: video.likedByUsers.length.toString(),
+                        onTap: () => _handleLike(video),
+                        color: isLiked ? Colors.red : Colors.white,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        video.caption,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
+                      const SizedBox(height: 16),
+                      _buildActionButton(
+                        icon: Icons.close,
+                        label: video.passedByUsers.length.toString(),
+                        onTap: () => _memeService.passMeme(
+                          video.id,
+                          _authService.currentUser!.uid,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        color: Colors.white,
                       ),
                     ],
                   ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildActionButton(
-                      icon: Icons.favorite,
-                      label: video.likedByUsers.length.toString(),
-                      onTap: () => _memeService.likeMeme(
-                        video.id,
-                        _authService.currentUser!.uid,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildActionButton(
-                      icon: Icons.close,
-                      label: video.passedByUsers.length.toString(),
-                      onTap: () => _memeService.passMeme(
-                        video.id,
-                        _authService.currentUser!.uid,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildActionButton(
-                      icon: Icons.share,
-                      label: 'Share',
-                      onTap: () {
-                        // Implement share functionality
-                      },
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundImage: video.userProfileImage != null
+                                  ? NetworkImage(video.userProfileImage!)
+                                  : null,
+                              child: video.userProfileImage == null
+                                  ? Text(video.userName[0].toUpperCase())
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              video.userName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          video.caption,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -294,6 +327,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    required Color color,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -305,7 +339,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
               color: Colors.black.withOpacity(0.5),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(height: 4),
           Text(

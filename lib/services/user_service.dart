@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_auth/models/connection.dart';
 import '../models/user_profile.dart';
 
 class UserService {
@@ -22,9 +23,6 @@ class UserService {
     String? bio,
   }) async {
     try {
-      print(
-          'Creating user profile with gender: $gender, preferredGender: $preferredGender');
-
       final userData = {
         'name': name,
         'age': age,
@@ -50,7 +48,6 @@ class UserService {
         },
       };
 
-      print('Saving user data to Firestore: $userData');
       await _firestore.collection('users').doc(userId).set(userData);
 
       // Update Auth profile
@@ -59,7 +56,6 @@ class UserService {
       }
       await _auth.currentUser?.updateDisplayName(name);
     } catch (e) {
-      print('Error creating user profile: $e');
       throw 'Failed to create user profile: $e';
     }
   }
@@ -70,9 +66,8 @@ class UserService {
       if (!doc.exists) return null;
 
       final data = doc.data()!;
-      print('Retrieved user data from Firestore: $data');
 
-      final profile = UserProfile(
+      return UserProfile(
         userId: userId,
         name: data['name'] ?? '',
         age: data['age'] ?? 0,
@@ -88,11 +83,7 @@ class UserService {
         bio: data['bio'],
         artwork: data['artwork'] as Map<String, dynamic>?,
       );
-
-      print('Created UserProfile object: ${profile.toMap()}');
-      return profile;
     } catch (e) {
-      print('Error getting user profile: $e');
       throw 'Failed to get user profile: $e';
     }
   }
@@ -223,5 +214,46 @@ class UserService {
         );
       }).toList();
     });
+  }
+
+  Stream<List<Connection>> getUserConnections(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('connections')
+        .orderBy('connectedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Connection.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
+
+  Future<void> removeConnection(String userId, String connectionId) async {
+    try {
+      // Remove connection from both users
+      final batch = _firestore.batch();
+
+      batch.delete(
+        _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('connections')
+            .doc(connectionId),
+      );
+
+      batch.delete(
+        _firestore
+            .collection('users')
+            .doc(connectionId)
+            .collection('connections')
+            .doc(userId),
+      );
+
+      await batch.commit();
+    } catch (e) {
+      throw 'Failed to remove connection: $e';
+    }
   }
 }
