@@ -82,7 +82,19 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final currentUser = _authService.currentUser;
       if (currentUser != null) {
-        // First check if users are connected
+        // First check for mutual likes
+        final hasCurrentUserLikedOtherMemes =
+            await _memeService.hasUserLikedMyMeme(
+          widget.profile.userId,
+          currentUser.uid,
+        );
+
+        final hasOtherUserLikedMyMemes = await _memeService.hasUserLikedMyMeme(
+          currentUser.uid,
+          widget.profile.userId,
+        );
+
+        // Check connection status as well
         final connection1 = await _firestore
             .collection('users')
             .doc(currentUser.uid)
@@ -98,11 +110,15 @@ class _ChatScreenState extends State<ChatScreen> {
             .get();
 
         final areConnected = connection1.exists && connection2.exists;
-        final canMessage = connection1.data()?['canMessage'] == true &&
-            connection2.data()?['canMessage'] == true;
+        final canMessageFromConnections =
+            connection1.data()?['canMessage'] == true &&
+                connection2.data()?['canMessage'] == true;
 
+        // Enable chat if either mutual likes exist or connections are valid
         setState(() {
-          _canChat = areConnected && canMessage;
+          _canChat =
+              (hasCurrentUserLikedOtherMemes && hasOtherUserLikedMyMemes) ||
+                  (areConnected && canMessageFromConnections);
         });
 
         if (_canChat) {
