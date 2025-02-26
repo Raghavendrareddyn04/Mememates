@@ -165,34 +165,27 @@ class ChatService {
       }, SetOptions(merge: true));
 
       // Update connection documents if they exist
-      final connection1 = await _firestore
-          .collection('users')
-          .doc(user1Id)
-          .collection('connections')
-          .doc(user2Id)
-          .get();
+      final batch = _firestore.batch();
 
-      final connection2 = await _firestore
+      final connection1Ref = _firestore
+          .collection('users')
+          .doc(user1Id)
+          .collection('connections')
+          .doc(user2Id);
+
+      final connection2Ref = _firestore
           .collection('users')
           .doc(user2Id)
           .collection('connections')
-          .doc(user1Id)
-          .get();
+          .doc(user1Id);
+
+      final connection1 = await connection1Ref.get();
+      final connection2 = await connection2Ref.get();
 
       if (connection1.exists && connection2.exists) {
-        await _firestore
-            .collection('users')
-            .doc(user1Id)
-            .collection('connections')
-            .doc(user2Id)
-            .update({'canMessage': true});
-
-        await _firestore
-            .collection('users')
-            .doc(user2Id)
-            .collection('connections')
-            .doc(user1Id)
-            .update({'canMessage': true});
+        batch.update(connection1Ref, {'canMessage': true});
+        batch.update(connection2Ref, {'canMessage': true});
+        await batch.commit();
       }
     } catch (e) {
       print('Error enabling messaging: $e');
@@ -206,26 +199,61 @@ class ChatService {
       final sortedIds = [likerId, memeOwnerId]..sort();
       final chatId = sortedIds.join('_');
 
+      // Check if chat already exists
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-      final canChat = await _checkChatEligibility(likerId, memeOwnerId);
 
-      if (!chatDoc.exists) {
+      // First check for mutual likes
+      final hasLikerLikedOwnerMeme =
+          await _checkChatEligibility(likerId, memeOwnerId);
+
+      // Only create/update chat if it doesn't exist or messaging isn't enabled
+      if (!chatDoc.exists || !(chatDoc.data()?['canMessage'] ?? false)) {
+        // Create or update chat document with messaging enabled if there's a mutual like
         await _firestore.collection('chats').doc(chatId).set({
           'participants': sortedIds,
           'lastMessage': '',
           'lastMessageTime': FieldValue.serverTimestamp(),
           'readBy': [],
-          'canMessage': canChat,
+          'canMessage': hasLikerLikedOwnerMeme, // Set based on mutual likes
           'createdAt': FieldValue.serverTimestamp(),
           'active': true,
           'lastViewed': {},
           'expiresAt': null,
-        });
-      } else if (canChat && !chatDoc.data()?['canMessage']) {
-        // Update existing chat if it becomes eligible
-        await _firestore.collection('chats').doc(chatId).update({
-          'canMessage': true,
-        });
+        }, SetOptions(merge: true));
+
+        // If there's a mutual like, ensure connections are updated
+        if (hasLikerLikedOwnerMeme) {
+          // Update or create connections for both users
+          final batch = _firestore.batch();
+
+          batch.set(
+              _firestore
+                  .collection('users')
+                  .doc(likerId)
+                  .collection('connections')
+                  .doc(memeOwnerId),
+              {
+                'userId': memeOwnerId,
+                'canMessage': true,
+                'connectedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
+
+          batch.set(
+              _firestore
+                  .collection('users')
+                  .doc(memeOwnerId)
+                  .collection('connections')
+                  .doc(likerId),
+              {
+                'userId': likerId,
+                'canMessage': true,
+                'connectedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
+
+          await batch.commit();
+        }
       }
     } catch (e) {
       throw 'Failed to create chat: $e';
@@ -246,6 +274,8 @@ class ChatService {
       }
 
       final List<ChatPreview> chats = [];
+      final processedUserIds = <String>{}; // Track processed users
+
       for (var doc in chatsQuery.docs) {
         final data = doc.data();
         final participants =
@@ -258,7 +288,10 @@ class ChatService {
           orElse: () => '',
         );
 
-        if (otherUserId.isEmpty) continue;
+        // Skip if we've already processed this user
+        if (otherUserId.isEmpty || processedUserIds.contains(otherUserId))
+          continue;
+        processedUserIds.add(otherUserId);
 
         final userDoc =
             await _firestore.collection('users').doc(otherUserId).get();

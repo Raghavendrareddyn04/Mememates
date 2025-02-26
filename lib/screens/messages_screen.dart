@@ -333,7 +333,7 @@ class _MessagesScreenState extends State<MessagesScreen>
               child: Row(
                 children: [
                   Hero(
-                    tag: 'profile_${chat.otherUserId}',
+                    tag: 'profile_${chat.chatId}_${chat.otherUserId}',
                     child: Container(
                       width: isSmallScreen ? 56 : 64,
                       height: isSmallScreen ? 56 : 64,
