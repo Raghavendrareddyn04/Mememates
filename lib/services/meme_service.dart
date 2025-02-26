@@ -265,7 +265,6 @@ class MemeService {
     }
   }
 
-  // Post a video meme
   Future<void> postVideo({
     required String userId,
     required String userName,
@@ -324,7 +323,6 @@ class MemeService {
     }
   }
 
-  // Post a new meme and update streak
   Future<void> postMeme({
     required String userId,
     required String userName,
@@ -425,7 +423,6 @@ class MemeService {
     }
   }
 
-  // Get meme feed for a user (excluding their own memes and liked/passed memes)
   Stream<List<MemePost>> getMemesFeed(
     String userId, {
     int? minAge,
@@ -499,10 +496,8 @@ class MemeService {
     });
   }
 
-  // Like meme and store in user's liked memes
   Future<void> likeMeme(String memeId, String userId) async {
     try {
-      // Use transaction for atomic operations
       await _firestore.runTransaction((transaction) async {
         final memeRef = _firestore.collection('memes').doc(memeId);
         final userRef = _firestore.collection('users').doc(userId);
@@ -515,23 +510,19 @@ class MemeService {
         final memeData = memeDoc.data()!;
         final memeOwnerId = memeData['userId'] as String;
 
-        // Don't allow self-likes
         if (memeOwnerId == userId) {
           throw 'Cannot like your own meme';
         }
 
-        // Check if already liked
         final likedByUsers = List<String>.from(memeData['likedByUsers'] ?? []);
         if (likedByUsers.contains(userId)) {
           throw 'Meme already liked';
         }
 
-        // Update meme document
         transaction.update(memeRef, {
           'likedByUsers': FieldValue.arrayUnion([userId]),
         });
 
-        // Update user's liked memes
         transaction.update(userRef, {
           'likedMemes': FieldValue.arrayUnion([memeId])
         });
@@ -548,13 +539,19 @@ class MemeService {
           memeId: memeId,
         );
 
-        // Check for mutual like and create vibe match if needed
+        // Check for mutual like and handle chat activation
         final hasOtherUserLikedMyMeme =
             await hasUserLikedMyMeme(userId, memeOwnerId);
         if (hasOtherUserLikedMyMeme) {
+          // Create chat first
+          await _chatService.createChatOnMemeLike(memeId, userId, memeOwnerId);
+
+          // Then try to enable messaging (this will now handle errors gracefully)
+          await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
+
+          // Send vibe match notifications
           await _notificationService.handleVibeMatch(memeOwnerId, userName);
 
-          // Get meme owner's name and notify the current user
           final ownerDoc =
               await _firestore.collection('users').doc(memeOwnerId).get();
           final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
@@ -567,7 +564,6 @@ class MemeService {
     }
   }
 
-  // Pass meme and store in user's passed memes
   Future<void> passMeme(String memeId, String userId) async {
     try {
       final batch = _firestore.batch();
@@ -588,7 +584,6 @@ class MemeService {
     }
   }
 
-  // Get user's streak info with timer
   Future<Map<String, dynamic>> getUserStreakInfo(String userId) async {
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -630,7 +625,6 @@ class MemeService {
     }
   }
 
-  // Get user's memes
   Stream<List<MemePost>> getUserMemes(String userId) {
     return _firestore
         .collection('memes')
@@ -657,7 +651,6 @@ class MemeService {
             }).toList());
   }
 
-  // Get user's liked memes
   Future<List<MemePost>> getLikedMemes(String userId) async {
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -692,7 +685,6 @@ class MemeService {
     }
   }
 
-  // Remove meme from liked memes
   Future<void> removeLikedMeme(String memeId, String userId) async {
     try {
       final batch = _firestore.batch();
@@ -713,7 +705,6 @@ class MemeService {
     }
   }
 
-  // Get mutual likes for vibe matches
   Future<List<UserProfile>> getMutualLikes(String userId) async {
     try {
       // Get users who liked my memes
@@ -772,47 +763,6 @@ class MemeService {
     }
   }
 
-  // Background processing for like
-  Future<void> _handleLikeBackground(
-      String memeId, String userId, String memeOwnerId) async {
-    try {
-      // Get current user's name
-      final currentUserDoc =
-          await _firestore.collection('users').doc(userId).get();
-      final currentUserName = currentUserDoc.data()?['name'] ?? 'Someone';
-
-      // Create chat entry
-      await _chatService.createChatOnMemeLike(memeId, userId, memeOwnerId);
-
-      // Send notification for meme like
-      await _notificationService.handleMemeInteraction(
-        memeOwnerId: memeOwnerId,
-        interactorName: currentUserName,
-        isLike: true,
-      );
-
-      // Check for mutual like
-      final hasOtherUserLikedMyMeme =
-          await hasUserLikedMyMeme(userId, memeOwnerId);
-      if (hasOtherUserLikedMyMeme) {
-        // Enable messaging
-        await _chatService.checkAndEnableMessaging(userId, memeOwnerId);
-
-        // Get other user's name
-        final ownerDoc =
-            await _firestore.collection('users').doc(memeOwnerId).get();
-        final ownerName = ownerDoc.data()?['name'] ?? 'Someone';
-
-        // Send vibe match notifications to both users
-        await _notificationService.handleVibeMatch(
-            memeOwnerId, currentUserName);
-        await _notificationService.handleVibeMatch(userId, ownerName);
-      }
-    } catch (e) {
-      print('Background like processing error: $e');
-    }
-  }
-
   Future<bool> hasUserLikedMyMeme(String myUserId, String otherUserId) async {
     final querySnapshot = await _firestore
         .collection('memes')
@@ -824,7 +774,6 @@ class MemeService {
     return querySnapshot.docs.isNotEmpty;
   }
 
-  // Add method for handling mood board interactions
   Future<void> handleMoodBoardInteraction({
     required String boardOwnerId,
     required String interactorId,
@@ -845,7 +794,6 @@ class MemeService {
     }
   }
 
-  // Get top 10 memes by likes
   Future<List<MemePost>> getTopMemes() async {
     try {
       final querySnapshot = await _firestore.collection('memes').get();

@@ -10,7 +10,6 @@ class ChatService {
   late encrypt.IV _iv;
   bool _isInitialized = false;
 
-  // Initialize encryption on constructor
   ChatService() {
     _initializeEncryption();
   }
@@ -19,21 +18,17 @@ class ChatService {
     if (_isInitialized) return;
 
     try {
-      // Create a 256-bit (32 bytes) key using SHA-256
       final keyString = 'mememates_secure_key_32_bytes_123!';
       final keyBytes = sha256.convert(utf8.encode(keyString)).bytes;
       final keyUint8List = Uint8List.fromList(keyBytes);
       final key = encrypt.Key(keyUint8List);
 
-      // Create a fixed IV from the first 16 bytes of the key
       _iv = encrypt.IV(Uint8List.fromList(keyBytes.sublist(0, 16)));
-
       _encrypter =
           encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
       _isInitialized = true;
     } catch (e) {
       print('Error initializing encryption: $e');
-      // Fallback to a proper 256-bit key if needed
       final fallbackKey = encrypt.Key.fromSecureRandom(32);
       _encrypter = encrypt.Encrypter(
           encrypt.AES(fallbackKey, mode: encrypt.AESMode.cbc));
@@ -52,7 +47,7 @@ class ChatService {
       return encrypted.base64;
     } catch (e) {
       print('Encryption error: $e');
-      return 'PLAIN:$message'; // Return plaintext with marker as fallback
+      return 'PLAIN:$message';
     }
   }
 
@@ -63,14 +58,14 @@ class ChatService {
 
     try {
       if (encryptedMessage.startsWith('PLAIN:')) {
-        return encryptedMessage.substring(6); // Remove 'PLAIN:' prefix
+        return encryptedMessage.substring(6);
       }
 
       final encrypted = encrypt.Encrypted.fromBase64(encryptedMessage);
       return _encrypter.decrypt(encrypted, iv: _iv);
     } catch (e) {
       print('Decryption error: $e');
-      return 'Unable to decrypt message'; // Return error message as fallback
+      return 'Unable to decrypt message';
     }
   }
 
@@ -82,29 +77,15 @@ class ChatService {
       final chatDoc = await _firestore.collection('chats').doc(chatId).get();
 
       if (!chatDoc.exists) {
-        // Check if users are connected
-        final connection1 = await _firestore
-            .collection('users')
-            .doc(userId1)
-            .collection('connections')
-            .doc(userId2)
-            .get();
-
-        final connection2 = await _firestore
-            .collection('users')
-            .doc(userId2)
-            .collection('connections')
-            .doc(userId1)
-            .get();
-
-        final canMessage = connection1.exists && connection2.exists;
+        // Check both connection and mutual meme likes
+        final canChat = await _checkChatEligibility(userId1, userId2);
 
         await _firestore.collection('chats').doc(chatId).set({
           'participants': sortedIds,
           'lastMessage': '',
           'lastMessageTime': FieldValue.serverTimestamp(),
           'readBy': [],
-          'canMessage': canMessage,
+          'canMessage': canChat,
           'createdAt': FieldValue.serverTimestamp(),
           'active': true,
           'lastViewed': {},
@@ -115,6 +96,139 @@ class ChatService {
       return chatId;
     } catch (e) {
       throw 'Failed to get chat ID: $e';
+    }
+  }
+
+  Future<bool> _checkChatEligibility(String userId1, String userId2) async {
+    try {
+      // Check connection status
+      final connection1 = await _firestore
+          .collection('users')
+          .doc(userId1)
+          .collection('connections')
+          .doc(userId2)
+          .get();
+
+      final connection2 = await _firestore
+          .collection('users')
+          .doc(userId2)
+          .collection('connections')
+          .doc(userId1)
+          .get();
+
+      if (connection1.exists && connection2.exists) {
+        return true;
+      }
+
+      // Check mutual meme likes
+      final user1Memes = await _firestore
+          .collection('memes')
+          .where('userId', isEqualTo: userId1)
+          .where('likedByUsers', arrayContains: userId2)
+          .get();
+
+      final user2Memes = await _firestore
+          .collection('memes')
+          .where('userId', isEqualTo: userId2)
+          .where('likedByUsers', arrayContains: userId1)
+          .get();
+
+      return user1Memes.docs.isNotEmpty && user2Memes.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking chat eligibility: $e');
+      return false;
+    }
+  }
+
+  Future<void> checkAndEnableMessaging(String user1Id, String user2Id) async {
+    try {
+      final sortedIds = [user1Id, user2Id]..sort();
+      final chatId = sortedIds.join('_');
+
+      // Check eligibility first
+      final canChat = await _checkChatEligibility(user1Id, user2Id);
+      if (!canChat) {
+        return; // Silently return instead of throwing an error
+      }
+
+      // Update or create chat document
+      await _firestore.collection('chats').doc(chatId).set({
+        'participants': sortedIds,
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'readBy': [],
+        'canMessage': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'active': true,
+        'lastViewed': {},
+        'expiresAt': null,
+      }, SetOptions(merge: true));
+
+      // Update connection documents if they exist
+      final connection1 = await _firestore
+          .collection('users')
+          .doc(user1Id)
+          .collection('connections')
+          .doc(user2Id)
+          .get();
+
+      final connection2 = await _firestore
+          .collection('users')
+          .doc(user2Id)
+          .collection('connections')
+          .doc(user1Id)
+          .get();
+
+      if (connection1.exists && connection2.exists) {
+        await _firestore
+            .collection('users')
+            .doc(user1Id)
+            .collection('connections')
+            .doc(user2Id)
+            .update({'canMessage': true});
+
+        await _firestore
+            .collection('users')
+            .doc(user2Id)
+            .collection('connections')
+            .doc(user1Id)
+            .update({'canMessage': true});
+      }
+    } catch (e) {
+      print('Error enabling messaging: $e');
+      // Don't rethrow the error, just log it
+    }
+  }
+
+  Future<void> createChatOnMemeLike(
+      String memeId, String likerId, String memeOwnerId) async {
+    try {
+      final sortedIds = [likerId, memeOwnerId]..sort();
+      final chatId = sortedIds.join('_');
+
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      final canChat = await _checkChatEligibility(likerId, memeOwnerId);
+
+      if (!chatDoc.exists) {
+        await _firestore.collection('chats').doc(chatId).set({
+          'participants': sortedIds,
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'readBy': [],
+          'canMessage': canChat,
+          'createdAt': FieldValue.serverTimestamp(),
+          'active': true,
+          'lastViewed': {},
+          'expiresAt': null,
+        });
+      } else if (canChat && !chatDoc.data()?['canMessage']) {
+        // Update existing chat if it becomes eligible
+        await _firestore.collection('chats').doc(chatId).update({
+          'canMessage': true,
+        });
+      }
+    } catch (e) {
+      throw 'Failed to create chat: $e';
     }
   }
 
@@ -176,89 +290,6 @@ class ChatService {
     } catch (e) {
       print('Error loading chats: $e');
       return [];
-    }
-  }
-
-  Future<void> createChatOnMemeLike(
-      String memeId, String likerId, String memeOwnerId) async {
-    try {
-      final sortedIds = [likerId, memeOwnerId]..sort();
-      final chatId = sortedIds.join('_');
-
-      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-
-      if (!chatDoc.exists) {
-        await _firestore.collection('chats').doc(chatId).set({
-          'participants': sortedIds,
-          'lastMessage': '',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'readBy': [],
-          'canMessage': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'active': true,
-          'lastViewed': {},
-          'expiresAt': null,
-        });
-      }
-    } catch (e) {
-      throw 'Failed to create chat: $e';
-    }
-  }
-
-  Future<void> checkAndEnableMessaging(String user1Id, String user2Id) async {
-    try {
-      final sortedIds = [user1Id, user2Id]..sort();
-      final chatId = sortedIds.join('_');
-
-      // Check if users are connected
-      final connection1 = await _firestore
-          .collection('users')
-          .doc(user1Id)
-          .collection('connections')
-          .doc(user2Id)
-          .get();
-
-      final connection2 = await _firestore
-          .collection('users')
-          .doc(user2Id)
-          .collection('connections')
-          .doc(user1Id)
-          .get();
-
-      if (!connection1.exists || !connection2.exists) {
-        throw 'Users are not connected';
-      }
-
-      // Update or create chat document
-      await _firestore.collection('chats').doc(chatId).set({
-        'participants': sortedIds,
-        'lastMessage': '',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'readBy': [],
-        'canMessage': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'active': true,
-        'lastViewed': {},
-        'expiresAt': null,
-      }, SetOptions(merge: true));
-
-      // Update connection documents
-      await _firestore
-          .collection('users')
-          .doc(user1Id)
-          .collection('connections')
-          .doc(user2Id)
-          .update({'canMessage': true});
-
-      await _firestore
-          .collection('users')
-          .doc(user2Id)
-          .collection('connections')
-          .doc(user1Id)
-          .update({'canMessage': true});
-    } catch (e) {
-      print('Error enabling messaging: $e');
-      throw 'Failed to enable messaging: $e';
     }
   }
 
