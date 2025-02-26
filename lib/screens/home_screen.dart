@@ -20,6 +20,7 @@ import 'meme_creator_screen.dart';
 import 'discovery_screen.dart';
 import 'dart:math';
 import 'package:flutter_auth/screens/leaderboard_screen.dart';
+import 'package:flutter_auth/screens/ai_meme_generator_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -683,6 +684,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           context,
                           MaterialPageRoute(
                             builder: (context) => const MemeCreatorScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildPostOptionButton(
+                      icon: Icons.auto_awesome, // AI-related icon
+                      label: 'Create with AI',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AIMemeGeneratorScreen(),
                           ),
                         );
                       },

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_auth/models/meme_post.dart';
+import 'package:flutter_auth/models/story.dart';
 import 'package:flutter_auth/services/meme_service.dart';
+import 'package:flutter_auth/services/story_service.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
 import '../services/auth_service.dart';
 import 'mood_board_editor_screen.dart';
 import 'mood_board_upload_screen.dart';
 import 'meme_detail_screen.dart';
+import 'story_create_screen.dart';
+import 'story_view_screen.dart';
 
 class DiscoveryScreen extends StatefulWidget {
   const DiscoveryScreen({super.key});
@@ -20,8 +24,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   final _authService = AuthService();
   final _firestore = FirebaseFirestore.instance;
   final _memeService = MemeService();
+  final _storyService = StoryService();
   bool _isLoading = true;
   List<MoodBoardPost> _moodBoards = [];
+  List<Story> _stories = [];
   final _scrollController = ScrollController();
   late AnimationController _animationController;
   String _selectedFilter = 'All';
@@ -44,6 +50,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     super.initState();
     _initializeAnimations();
     _loadMoodBoards();
+    _loadStories();
     _scrollController.addListener(_onScroll);
   }
 
@@ -114,6 +121,20 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     }
   }
 
+  Future<void> _loadStories() async {
+    try {
+      _storyService.getActiveStories().listen((stories) {
+        if (mounted) {
+          setState(() {
+            _stories = stories;
+          });
+        }
+      });
+    } catch (e) {
+      print('Error loading stories: $e');
+    }
+  }
+
   void _showCreateOptions() {
     showModalBottomSheet(
       context: context,
@@ -129,7 +150,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Create Mood Board',
+              'Create',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -138,8 +159,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
             ),
             const SizedBox(height: 24),
             _buildCreateOption(
+              icon: Icons.add_circle_outline,
+              title: 'Create Story',
+              description: 'Share a moment that lasts 24 hours',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const StoryCreateScreen(),
+                  ),
+                ).then((_) {
+                  // Refresh stories when returning from create screen
+                  _loadStories();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildCreateOption(
               icon: Icons.upload,
-              title: 'Upload Images',
+              title: 'Upload Mood Board',
               description: 'Choose images from your gallery',
               onTap: () {
                 Navigator.pop(context);
@@ -175,7 +214,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
             const SizedBox(height: 16),
             _buildCreateOption(
               icon: Icons.edit,
-              title: 'Open Editor',
+              title: 'Open Mood Board Editor',
               description: 'Create a custom mood board',
               onTap: () {
                 Navigator.pop(context);
@@ -274,6 +313,202 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStoriesSection() {
+    if (_stories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Group stories by user
+    final Map<String, List<Story>> storiesByUser = {};
+    for (var story in _stories) {
+      if (!storiesByUser.containsKey(story.userId)) {
+        storiesByUser[story.userId] = [];
+      }
+      storiesByUser[story.userId]!.add(story);
+    }
+
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: storiesByUser.length + 1, // +1 for "Add Story" item
+        itemBuilder: (context, index) {
+          // First item is "Add Story"
+          if (index == 0) {
+            return _buildAddStoryItem();
+          }
+
+          // Get user stories
+          final userId = storiesByUser.keys.elementAt(index - 1);
+          final userStories = storiesByUser[userId]!;
+          final userName = userStories.first.userName;
+          final userImage = userStories.first.userProfileImage;
+          final hasUnviewed = userStories.any((story) {
+            final currentUser = _authService.currentUser;
+            return currentUser != null &&
+                !story.viewedBy.contains(currentUser.uid);
+          });
+
+          return _buildStoryItem(
+            userId: userId,
+            userName: userName,
+            userImage: userImage,
+            hasUnviewed: hasUnviewed,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StoryViewScreen(
+                    stories: userStories,
+                    userId: userId,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAddStoryItem() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StoryCreateScreen(),
+                ),
+              ).then((_) {
+                // Refresh stories when returning from create screen
+                _loadStories();
+              });
+            },
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.purple.shade300, Colors.pink],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade900,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.deepPurple.shade900,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Add Story',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoryItem({
+    required String userId,
+    required String userName,
+    String? userImage,
+    required bool hasUnviewed,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: hasUnviewed
+                      ? [Colors.purple.shade300, Colors.pink]
+                      : [Colors.grey.shade400, Colors.grey.shade600],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade900,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.deepPurple.shade900,
+                      width: 2,
+                    ),
+                    image: userImage != null
+                        ? DecorationImage(
+                            image: NetworkImage(userImage),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: userImage == null
+                      ? Center(
+                          child: Text(
+                            userName[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            userName.length > 10 ? '${userName.substring(0, 8)}...' : userName,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -869,6 +1104,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 slivers: [
                   _buildAppBar(isSmallScreen),
                   if (_showFilters) _buildFiltersBar(isSmallScreen),
+                  SliverToBoxAdapter(
+                    child: _buildStoriesSection(),
+                  ),
                   SliverPadding(
                     padding: EdgeInsets.symmetric(
                       horizontal: isSmallScreen ? 16 : 24,

@@ -5,12 +5,91 @@ import 'package:flutter_auth/services/notification_service.dart';
 import '../models/meme_post.dart';
 import 'cloudinary_service.dart';
 import 'chat_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class MemeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CloudinaryService _cloudinaryService = CloudinaryService();
   final ChatService _chatService = ChatService();
   final NotificationService _notificationService = NotificationService();
+
+  // Updated AI meme generation method with better error handling
+  Future<String> generateMemeWithAI(String prompt) async {
+    try {
+      // Define a list of popular meme templates with their IDs
+      final templates = [
+        {'id': '181913649', 'name': 'Drake Hotline Bling'},
+        {'id': '87743020', 'name': 'Two Buttons'},
+        {'id': '112126428', 'name': 'Distracted Boyfriend'},
+        {'id': '129242436', 'name': 'Change My Mind'},
+        {'id': '124822590', 'name': 'Left Exit 12 Off Ramp'},
+        {'id': '438680', 'name': 'Batman Slapping Robin'},
+        {'id': '93895088', 'name': 'Expanding Brain'},
+        {'id': '102156234', 'name': 'Mocking SpongeBob'},
+        {'id': '131087935', 'name': 'Running Away Balloon'},
+        {'id': '61579', 'name': 'One Does Not Simply'},
+      ];
+
+      // Randomly select a template
+      final random = DateTime.now().millisecondsSinceEpoch % templates.length;
+      final template = templates[random];
+
+      final response = await http.post(
+        Uri.parse('https://api.imgflip.com/caption_image'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'template_id': template['id'], // Use the selected template
+          'username': 'mememates', // Replace with your ImgFlip credentials
+          'password': 'mememates',
+          'text0': prompt,
+          'text1': '',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw 'Server error: ${response.statusCode}';
+      }
+
+      final data = json.decode(response.body);
+
+      if (data['success'] != true) {
+        throw 'API error: ${data['error_message'] ?? 'Unknown error'}';
+      }
+
+      return data['data']['url'];
+    } catch (e) {
+      print('Error generating meme: $e');
+      throw 'Failed to generate meme. Please try again later.';
+    }
+  }
+
+  // Add method to post AI-generated meme
+  Future<void> postAIMeme({
+    required String userId,
+    required String userName,
+    required String memeUrl,
+    required String prompt,
+  }) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userProfileImage = userDoc.data()?['profileImage'] as String?;
+
+      await _firestore.collection('memes').add({
+        'userId': userId,
+        'userName': userName,
+        'memeUrl': memeUrl,
+        'caption': 'AI Generated: $prompt',
+        'createdAt': FieldValue.serverTimestamp(),
+        'likedByUsers': [],
+        'passedByUsers': [],
+        'userProfileImage': userProfileImage,
+        'isAIGenerated': true,
+      });
+    } catch (e) {
+      throw 'Failed to post AI meme: $e';
+    }
+  }
 
   Future<String?> getConnectionRequestStatus(
     String senderId,
@@ -821,7 +900,6 @@ class MemeService {
           userProfileImage: userData?['profileImage'],
         );
       }));
-
       // Sort by number of likes (descending) and take top 10
       memes.sort(
           (a, b) => b.likedByUsers.length.compareTo(a.likedByUsers.length));
