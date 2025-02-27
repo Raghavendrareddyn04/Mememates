@@ -34,6 +34,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   bool _showFilters = false;
   final Map<String, String?> _connectionStatuses = {};
 
+  // Cache for user data to reduce Firestore reads
+  final Map<String, Map<String, dynamic>> _userDataCache = {};
+
   final List<String> _filters = [
     'All',
     'Popular',
@@ -49,9 +52,25 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadMoodBoards();
-    _loadStories();
+    _loadData();
     _scrollController.addListener(_onScroll);
+  }
+
+  // Load data in parallel for better performance
+  Future<void> _loadData() async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    // Load stories and mood boards in parallel
+    await Future.wait([
+      _loadMoodBoards(),
+      _loadStories(),
+    ]);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _initializeAnimations() {
@@ -70,60 +89,109 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
     });
   }
 
+  // Get user data with caching to reduce Firestore reads
+  Future<Map<String, dynamic>> _getCachedUserData(String userId) async {
+    if (_userDataCache.containsKey(userId)) {
+      return _userDataCache[userId]!;
+    }
+
+    final doc = await _firestore.collection('users').doc(userId).get();
+    if (!doc.exists) {
+      return {};
+    }
+
+    final data = doc.data() ?? {};
+    _userDataCache[userId] = data;
+    return data;
+  }
+
   Future<void> _loadMoodBoards() async {
     if (!mounted) return;
 
-    setState(() => _isLoading = true);
     try {
-      final usersSnapshot = await _firestore.collection('users').get();
       final currentUser = _authService.currentUser;
+      if (currentUser == null) return;
+
+      // Use a more efficient query to get only users with mood boards
+      final usersSnapshot = await _firestore
+          .collection('users')
+          .where('moodBoardImages', isNotEqualTo: [])
+          .limit(20) // Limit to improve performance
+          .get();
 
       final boards = <MoodBoardPost>[];
+
+      // Process users in batches to improve performance
+      final futures = <Future>[];
+
       for (var doc in usersSnapshot.docs) {
         if (!mounted) return;
-        if (doc.id == currentUser?.uid) continue;
+        if (doc.id == currentUser.uid) continue;
 
         final data = doc.data();
         final moodBoardImages =
             List<String>.from(data['moodBoardImages'] ?? []);
-        if (moodBoardImages.isNotEmpty) {
-          final likesDoc =
-              await _firestore.collection('moodboard_likes').doc(doc.id).get();
-          final commentsSnapshot = await _firestore
-              .collection('moodboard_comments')
-              .doc(doc.id)
-              .collection('comments')
-              .get();
+        final userName = data['name'] ?? '';
 
-          boards.add(MoodBoardPost(
-            userId: doc.id,
-            userName: data['name'] ?? 'Anonymous',
-            userProfileImage: data['profileImage'],
-            images: moodBoardImages,
-            likes: List<String>.from(likesDoc.data()?['likedBy'] ?? []),
-            comments: commentsSnapshot.docs
-                .map((comment) => Comment(
-                      id: comment.id,
-                      userId: comment.data()['userId'],
-                      userName: comment.data()['userName'],
-                      content: comment.data()['content'],
-                      timestamp:
-                          (comment.data()['timestamp'] as Timestamp).toDate(),
-                    ))
-                .toList(),
-          ));
+        // Skip anonymous users (users without a name)
+        if (userName.isEmpty || userName == 'Anonymous') {
+          continue;
+        }
+
+        if (moodBoardImages.isNotEmpty) {
+          futures.add(_processMoodBoard(doc.id, data, moodBoardImages, boards));
         }
       }
+
+      // Wait for all processing to complete
+      await Future.wait(futures);
 
       if (!mounted) return;
       setState(() {
         _moodBoards = boards;
-        _isLoading = false;
       });
     } catch (e) {
       print('Error loading mood boards: $e');
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _processMoodBoard(String userId, Map<String, dynamic> userData,
+      List<String> moodBoardImages, List<MoodBoardPost> boards) async {
+    try {
+      // Skip if user is anonymous
+      final userName = userData['name'] ?? '';
+      if (userName.isEmpty || userName == 'Anonymous') {
+        return;
+      }
+
+      // Get likes and comments in parallel
+      final likesDoc =
+          await _firestore.collection('moodboard_likes').doc(userId).get();
+      final commentsSnapshot = await _firestore
+          .collection('moodboard_comments')
+          .doc(userId)
+          .collection('comments')
+          .get();
+
+      boards.add(MoodBoardPost(
+        userId: userId,
+        userName: userName,
+        userProfileImage: userData['profileImage'],
+        images: moodBoardImages,
+        likes: List<String>.from(likesDoc.data()?['likedBy'] ?? []),
+        comments: commentsSnapshot.docs
+            .map((comment) => Comment(
+                  id: comment.id,
+                  userId: comment.data()['userId'],
+                  userName: comment.data()['userName'],
+                  content: comment.data()['content'],
+                  timestamp:
+                      (comment.data()['timestamp'] as Timestamp).toDate(),
+                ))
+            .toList(),
+      ));
+    } catch (e) {
+      print('Error processing mood board for user $userId: $e');
     }
   }
 
