@@ -5,6 +5,7 @@ import 'package:flutter_auth/models/story.dart';
 import 'package:flutter_auth/services/story_service.dart';
 import 'package:flutter_auth/services/auth_service.dart';
 import 'package:flutter_auth/widgets/loading_animation.dart';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 
 class StoryCreateScreen extends StatefulWidget {
   const StoryCreateScreen({super.key});
@@ -19,7 +20,8 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
   final _textController = TextEditingController();
 
   StoryType _selectedType = StoryType.image;
-  String? _mediaPath;
+  XFile? _selectedMediaFile;
+  Uint8List? _webImage;
   bool _isLoading = false;
   Color _textColor = Colors.white;
   Color _backgroundColor = Colors.black;
@@ -37,9 +39,16 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
 
       if (pickedFile != null) {
         setState(() {
-          _mediaPath = pickedFile.path;
+          _selectedMediaFile = pickedFile;
           _selectedType = StoryType.image;
         });
+
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _webImage = bytes;
+          });
+        }
       }
     } catch (e) {
       _showErrorSnackBar('Error picking image: $e');
@@ -56,9 +65,16 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
 
       if (pickedFile != null) {
         setState(() {
-          _mediaPath = pickedFile.path;
+          _selectedMediaFile = pickedFile;
           _selectedType = StoryType.video;
         });
+
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _webImage = bytes;
+          });
+        }
       }
     } catch (e) {
       _showErrorSnackBar('Error picking video: $e');
@@ -79,7 +95,7 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
 
     if ((_selectedType == StoryType.image ||
             _selectedType == StoryType.video) &&
-        _mediaPath == null) {
+        _selectedMediaFile == null) {
       _showErrorSnackBar('Please select media for your story');
       return;
     }
@@ -97,7 +113,7 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
           'backgroundColor': _backgroundColor.value.toString(),
         };
       } else {
-        content = _mediaPath!;
+        content = _selectedMediaFile!.path;
       }
 
       await _storyService.createStory(
@@ -130,7 +146,7 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
   }
 
   Widget _buildMediaPreview() {
-    if (_mediaPath == null) {
+    if (_selectedMediaFile == null) {
       return const Center(
         child: Text(
           'No media selected',
@@ -140,12 +156,7 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
     }
 
     if (_selectedType == StoryType.image) {
-      return Image.file(
-        File(_mediaPath!),
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-      );
+      return _buildImageWidget();
     } else if (_selectedType == StoryType.video) {
       return Stack(
         alignment: Alignment.center,
@@ -164,7 +175,7 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
           Positioned(
             bottom: 16,
             child: Text(
-              'Video selected: ${_mediaPath!.split('/').last}',
+              'Video selected: ${_selectedMediaFile!.path.split('/').last}',
               style: const TextStyle(
                 color: Colors.white,
                 backgroundColor: Colors.black54,
@@ -177,6 +188,35 @@ class _StoryCreateScreenState extends State<StoryCreateScreen> {
     }
 
     return const SizedBox.shrink();
+  }
+
+  Widget _buildImageWidget() {
+    if (kIsWeb) {
+      if (_webImage != null) {
+        return Image.memory(
+          _webImage!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        );
+      }
+      return Container(
+        color: Colors.grey[800],
+        child: const Center(
+          child: Text(
+            'Image preview not available',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+      );
+    } else {
+      return Image.file(
+        File(_selectedMediaFile!.path),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
   }
 
   Widget _buildTextStoryEditor() {
