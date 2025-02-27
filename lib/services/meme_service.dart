@@ -618,6 +618,15 @@ class MemeService {
           memeId: memeId,
         );
 
+        // NEW FEATURE: Send connection request when liking a meme
+        // First check if a connection request already exists
+        final connectionStatus =
+            await getConnectionRequestStatus(userId, memeOwnerId);
+        if (connectionStatus == null) {
+          // No existing connection or request, so send a new request
+          await sendConnectionRequest(userId, memeOwnerId);
+        }
+
         // Check for mutual like and handle chat activation
         final hasOtherUserLikedMyMeme =
             await hasUserLikedMyMeme(userId, memeOwnerId);

@@ -28,6 +28,7 @@ class _AudiusPlayerState extends State<AudiusPlayer> {
   String? _error;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  bool _mounted = true;
 
   @override
   void initState() {
@@ -38,36 +39,46 @@ class _AudiusPlayerState extends State<AudiusPlayer> {
 
   void _setupPlayerListeners() {
     _audioPlayer.durationStream.listen((duration) {
-      if (duration != null) {
+      if (duration != null && _mounted) {
         setState(() => _duration = duration);
       }
     });
 
     _audioPlayer.positionStream.listen((position) {
-      setState(() => _position = position);
+      if (_mounted) {
+        setState(() => _position = position);
+      }
     });
 
     _audioPlayer.playerStateStream.listen((playerState) {
-      setState(() {
-        _isPlaying = playerState.playing;
-      });
+      if (_mounted) {
+        setState(() {
+          _isPlaying = playerState.playing;
+        });
+      }
     });
   }
 
   Future<void> _initializePlayer() async {
+    if (!_mounted) return;
+
     setState(() => _isLoading = true);
     try {
       final streamUrl = await _audiusService.getStreamUrl(widget.trackId);
       await _audioPlayer.setUrl(streamUrl);
-      setState(() {
-        _isLoading = false;
-        _error = null;
-      });
+      if (_mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = null;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Failed to load track: $e';
-      });
+      if (_mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Failed to load track: $e';
+        });
+      }
     }
   }
 
@@ -81,7 +92,9 @@ class _AudiusPlayerState extends State<AudiusPlayer> {
         await _audioPlayer.play();
       }
     } catch (e) {
-      setState(() => _error = 'Playback error: $e');
+      if (_mounted) {
+        setState(() => _error = 'Playback error: $e');
+      }
     }
   }
 
@@ -94,6 +107,7 @@ class _AudiusPlayerState extends State<AudiusPlayer> {
 
   @override
   void dispose() {
+    _mounted = false;
     _audioPlayer.dispose();
     super.dispose();
   }

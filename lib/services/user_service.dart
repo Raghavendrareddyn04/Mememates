@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_auth/models/connection.dart';
+import 'package:flutter_auth/models/connection_request.dart';
 import '../models/user_profile.dart';
 
 class UserService {
@@ -228,6 +229,51 @@ class UserService {
           .map((doc) => Connection.fromMap(doc.data(), doc.id))
           .toList();
     });
+  }
+
+  Stream<List<ConnectionRequest>> getSentConnectionRequests(String userId) {
+    return _firestore
+        .collection('connection_requests')
+        .where('senderId', isEqualTo: userId)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      List<ConnectionRequest> requests = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final receiverId = data['receiverId'] as String;
+
+        // Get receiver's profile data
+        final receiverDoc =
+            await _firestore.collection('users').doc(receiverId).get();
+        String receiverName = data['receiverName'] ?? 'User';
+        String? receiverProfileImage;
+
+        if (receiverDoc.exists) {
+          receiverName = receiverDoc.data()?['name'] ?? receiverName;
+          receiverProfileImage = receiverDoc.data()?['profileImage'];
+        }
+
+        requests.add(ConnectionRequest.fromMap({
+          ...data,
+          'receiverName': receiverName,
+          'receiverProfileImage': receiverProfileImage,
+        }, doc.id));
+      }
+
+      return requests;
+    });
+  }
+
+  Future<void> cancelConnectionRequest(String requestId) async {
+    try {
+      await _firestore
+          .collection('connection_requests')
+          .doc(requestId)
+          .delete();
+    } catch (e) {
+      throw 'Failed to cancel connection request: $e';
+    }
   }
 
   Future<void> removeConnection(String userId, String connectionId) async {

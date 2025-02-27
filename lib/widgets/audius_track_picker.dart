@@ -18,6 +18,7 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
   List<Map<String, dynamic>> _tracks = [];
   bool _isLoading = true;
   String? _error;
+  bool _mounted = true;
 
   @override
   void initState() {
@@ -26,19 +27,25 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
   }
 
   Future<void> _loadTracks() async {
+    if (!_mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
       final tracks = await _audiusService.getTrendingTracks();
-      setState(() {
-        _tracks = tracks;
-        _isLoading = false;
-      });
+      if (_mounted) {
+        setState(() {
+          _tracks = tracks;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load tracks: $e';
-        _isLoading = false;
-      });
+      if (_mounted) {
+        setState(() {
+          _error = 'Failed to load tracks: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -46,6 +53,12 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
     return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _mounted = false;
+    super.dispose();
   }
 
   @override
@@ -147,12 +160,14 @@ class _AudiusTrackPickerState extends State<AudiusTrackPicker> {
                 'user': track['artist'] ?? 'Unknown Artist',
               };
               widget.onTrackSelected(selectedTrack);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Selected: ${selectedTrack['title']}'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Selected: ${selectedTrack['title']}'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
             },
           ),
         );
