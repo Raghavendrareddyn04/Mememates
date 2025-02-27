@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Tab(
                 icon: Icon(Icons.video_collection,
                     color: Colors.white), // Icon in white
-                child: Text('Videos',
+                child: Text('RizzTok',
                     style: TextStyle(color: Colors.white)), // Text in white
               ),
             ],

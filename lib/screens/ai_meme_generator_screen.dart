@@ -277,7 +277,7 @@ class _AIMemeGeneratorScreenState extends State<AIMemeGeneratorScreen>
               maxLines: 4,
               decoration: InputDecoration(
                 hintText:
-                    'Example: "A cat wearing sunglasses coding on a laptop"',
+                    'Example: "Type any text it will generate a meme for you"',
                 hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                 filled: true,
                 fillColor: Colors.white.withOpacity(0.1),

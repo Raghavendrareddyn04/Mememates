@@ -572,7 +572,7 @@ class _MemeCreatorScreenState extends State<MemeCreatorScreen>
               label: Text(
                 style,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? Colors.white : Colors.black,
                   fontFamily: style,
                 ),
               ),
