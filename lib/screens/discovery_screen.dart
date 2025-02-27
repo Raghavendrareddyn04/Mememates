@@ -64,12 +64,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 
   void _onScroll() {
+    if (!mounted) return;
     setState(() {
       _showFilters = _scrollController.offset <= 10;
     });
   }
 
   Future<void> _loadMoodBoards() async {
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
     try {
       final usersSnapshot = await _firestore.collection('users').get();
@@ -77,6 +80,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
 
       final boards = <MoodBoardPost>[];
       for (var doc in usersSnapshot.docs) {
+        if (!mounted) return;
         if (doc.id == currentUser?.uid) continue;
 
         final data = doc.data();
@@ -111,12 +115,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _moodBoards = boards;
         _isLoading = false;
       });
     } catch (e) {
       print('Error loading mood boards: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -171,7 +177,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                   ),
                 ).then((_) {
                   // Refresh stories when returning from create screen
-                  _loadStories();
+                  if (mounted) {
+                    _loadStories();
+                  }
                 });
               },
             ),
@@ -190,14 +198,16 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                       onSave: (images) async {
                         try {
                           final currentUser = _authService.currentUser;
-                          if (currentUser != null) {
+                          if (currentUser != null && mounted) {
                             await _firestore
                                 .collection('users')
                                 .doc(currentUser.uid)
                                 .update({
                               'moodBoardImages': images,
                             });
-                            await _loadMoodBoards();
+                            if (mounted) {
+                              await _loadMoodBoards();
+                            }
                           }
                         } catch (e) {
                           if (mounted) {
@@ -226,14 +236,16 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                       onSave: (images) async {
                         try {
                           final currentUser = _authService.currentUser;
-                          if (currentUser != null) {
+                          if (currentUser != null && mounted) {
                             await _firestore
                                 .collection('users')
                                 .doc(currentUser.uid)
                                 .update({
                               'moodBoardImages': images,
                             });
-                            await _loadMoodBoards();
+                            if (mounted) {
+                              await _loadMoodBoards();
+                            }
                           }
                         } catch (e) {
                           if (mounted) {
@@ -390,7 +402,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 ),
               ).then((_) {
                 // Refresh stories when returning from create screen
-                _loadStories();
+                if (mounted) {
+                  _loadStories();
+                }
               });
             },
             child: Container(
@@ -486,7 +500,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                   child: userImage == null
                       ? Center(
                           child: Text(
-                            userName[0].toUpperCase(),
+                            userName.isNotEmpty
+                                ? userName[0].toUpperCase()
+                                : '?',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -501,8 +517,12 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            userName.length > 10 ? '${userName.substring(0, 8)}...' : userName,
-            style: TextStyle(
+            userName.isNotEmpty
+                ? (userName.length > 10
+                    ? '${userName.substring(0, 8)}...'
+                    : userName)
+                : 'Anonymous',
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
             ),
@@ -561,7 +581,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 : null,
             child: post.userProfileImage == null
                 ? Text(
-                    post.userName[0].toUpperCase(),
+                    post.userName.isNotEmpty
+                        ? post.userName[0].toUpperCase()
+                        : '?',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -575,7 +597,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  post.userName,
+                  post.userName.isNotEmpty ? post.userName : 'Anonymous',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -636,6 +658,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 
   Widget _buildMoodBoardImages(MoodBoardPost post) {
+    if (post.images.isEmpty) {
+      return const Center(
+        child: Text(
+          'No images',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
+    }
+
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       physics: const NeverScrollableScrollPhysics(),
@@ -731,6 +762,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         post.userId,
       );
 
+      if (!mounted) return;
       setState(() {
         _connectionStatuses[post.userId] = 'pending';
       });
@@ -797,6 +829,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
   }
 
   void _navigateToMemeDetails(MoodBoardPost post) {
+    if (post.images.isEmpty) return;
+
     // Convert MoodBoardPost to MemePost
     final memePost = MemePost(
       id: post.userId, // Using userId as a unique identifier
@@ -829,6 +863,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         isLike: true,
       );
 
+      if (!mounted) return;
       setState(() {
         if (!post.likes.contains(currentUser.uid)) {
           post.likes.add(currentUser.uid);
@@ -888,50 +923,59 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
               ),
             ),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: post.comments.length,
-                itemBuilder: (context, index) {
-                  final comment = post.comments[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              comment.userName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+              child: post.comments.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No comments yet',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: post.comments.length,
+                      itemBuilder: (context, index) {
+                        final comment = post.comments[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    comment.userName.isNotEmpty
+                                        ? comment.userName
+                                        : 'Anonymous',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatTimestamp(comment.timestamp),
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formatTimestamp(comment.timestamp),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 12,
+                              const SizedBox(height: 4),
+                              Text(
+                                comment.content,
+                                style: const TextStyle(color: Colors.white),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          comment.content,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ],
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
             Container(
               padding: EdgeInsets.only(
@@ -1016,6 +1060,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
         'timestamp': comment.timestamp,
       });
 
+      if (!mounted) return;
       setState(() {
         post.comments.add(comment);
       });
