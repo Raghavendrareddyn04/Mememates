@@ -66,25 +66,47 @@ class _MoodBoardUploadScreenState extends State<MoodBoardUploadScreen>
     }
 
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
+      // Pick multiple images
+      final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 80,
       );
 
-      if (image != null) {
+      if (images.isNotEmpty) {
         setState(() => _isLoading = true);
-        final url = await _cloudinaryService.uploadImage(image.path);
-        setState(() {
-          _selectedImages.add(url);
-          _isLoading = false;
-        });
+
+        // Calculate how many images we can add
+        final int remainingSlots = 4 - _selectedImages.length;
+        final List<XFile> imagesToUpload = images.length <= remainingSlots
+            ? images
+            : images.sublist(0, remainingSlots);
+
+        // Show a message if we're limiting the number of images
+        if (images.length > remainingSlots) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Only adding ${imagesToUpload.length} images to stay within the limit of 4'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+
+        // Upload each image
+        for (final image in imagesToUpload) {
+          final url = await _cloudinaryService.uploadImage(image.path);
+          setState(() {
+            _selectedImages.add(url);
+          });
+        }
+
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error picking image: $e'),
+            content: Text('Error picking images: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -295,7 +317,7 @@ class _MoodBoardUploadScreenState extends State<MoodBoardUploadScreen>
         onPressed: _pickImage,
         icon: const Icon(Icons.add_photo_alternate),
         label: Text(
-          'Add Image',
+          'Add Images',
           style: TextStyle(
             fontSize: isWideScreen ? 16 : 14,
           ),

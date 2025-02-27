@@ -1360,7 +1360,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen>
                 selectedColor: Colors.pink,
                 checkmarkColor: Colors.white,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? Colors.white : Colors.black,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
                 padding: EdgeInsets.symmetric(
