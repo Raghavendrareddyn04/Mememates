@@ -69,7 +69,7 @@ class CloudinaryService {
       final publicId = _extractPublicId(response.secureUrl);
       final transformationString = transformations.join(",");
 
-      return 'https://res.cloudinary.com/$cloudName/image/upload/$transformationString/v1/$publicId';
+      return 'https://res.cloudinary.com/$cloudName/image/upload/$transformationString/$publicId';
     } catch (e) {
       print('Cloudinary upload error: $e');
       throw 'Failed to upload image: $e';
@@ -103,33 +103,42 @@ class CloudinaryService {
     Color textColor = Colors.white,
   }) async {
     try {
+      // Extract the public ID from the URL
       final publicId = _extractPublicId(imageUrl);
-      final List<String> transformations = [];
 
-      // Convert color to RGB format
-      final colorString =
-          'co_rgb:${(textColor.red / 255).toStringAsFixed(2)}_${(textColor.green / 255).toStringAsFixed(2)}_${(textColor.blue / 255).toStringAsFixed(2)}';
+      // Convert color to hex format for Cloudinary
+      final colorHex = textColor.value.toRadixString(16).substring(2);
 
+      // Build the transformation URL
+      List<String> transformations = [];
+
+      // Add top text if provided
       if (topText != null && topText.isNotEmpty) {
         final encodedText = Uri.encodeComponent(topText);
         transformations.add(
-          'l_text:Arial_70_bold:$encodedText/$colorString/g_north,y_50/fl_layer_apply',
-        );
+            'l_text:Arial_70_bold:$encodedText,co_rgb:$colorHex,g_north,y_50');
       }
 
+      // Add bottom text if provided
       if (bottomText != null && bottomText.isNotEmpty) {
         final encodedText = Uri.encodeComponent(bottomText);
         transformations.add(
-          'l_text:Arial_70_bold:$encodedText/$colorString/g_south,y_50/fl_layer_apply',
-        );
+            'l_text:Arial_70_bold:$encodedText,co_rgb:$colorHex,g_south,y_50');
       }
 
-      if (transformations.isEmpty) {
-        return imageUrl;
+      // Construct the final URL
+      String transformUrl =
+          'https://res.cloudinary.com/$cloudName/image/upload';
+
+      if (transformations.isNotEmpty) {
+        transformUrl += '/${transformations.join("/")}';
       }
 
-      return 'https://res.cloudinary.com/$cloudName/image/upload/${transformations.join("/")}/v1/$publicId';
+      transformUrl += '/$publicId';
+
+      return transformUrl;
     } catch (e) {
+      print('Failed to add text overlay: $e');
       throw 'Failed to add text overlay: $e';
     }
   }
@@ -174,25 +183,37 @@ class CloudinaryService {
   }
 
   String _extractPublicId(String url) {
-    final uri = Uri.parse(url);
-    final pathSegments = uri.pathSegments;
+    try {
+      final uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
 
-    // Find the index after 'upload' in the path
-    final uploadIndex = pathSegments.indexOf('upload');
-    if (uploadIndex != -1 && uploadIndex < pathSegments.length - 1) {
-      // Join all segments after 'upload', excluding any version numbers
-      final remainingSegments = pathSegments
-          .sublist(uploadIndex + 1)
-          .where((segment) => !segment.startsWith('v'))
-          .join('/');
+      // Find the index of 'upload' in the path
+      final uploadIndex = pathSegments.indexOf('upload');
+      if (uploadIndex != -1 && uploadIndex < pathSegments.length - 1) {
+        // Skip version number if present
+        int startIndex = uploadIndex + 1;
+        if (startIndex < pathSegments.length &&
+            pathSegments[startIndex].startsWith('v')) {
+          startIndex++;
+        }
 
-      // Remove file extension if present
-      return remainingSegments.replaceAll(RegExp(r'\.[^.]+$'), '');
+        // Join the remaining segments to form the public ID
+        if (startIndex < pathSegments.length) {
+          return pathSegments.sublist(startIndex).join('/');
+        }
+      }
+
+      // Fallback: just use the last segment
+      if (pathSegments.isNotEmpty) {
+        return pathSegments.last;
+      }
+
+      throw 'Could not extract public ID from URL: $url';
+    } catch (e) {
+      print('Error extracting public ID: $e');
+      // Return the original URL as a fallback
+      return url;
     }
-
-    // Fallback: return the last path segment without extension
-    final lastSegment = pathSegments.last;
-    return lastSegment.replaceAll(RegExp(r'\.[^.]+$'), '');
   }
 
   Future<String> generateMoodBoard(

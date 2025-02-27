@@ -357,15 +357,7 @@ class _MemeCreatorScreenState extends State<MemeCreatorScreen>
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: kIsWeb
-                                  ? Image.memory(
-                                      _webImage!,
-                                      fit: BoxFit.contain,
-                                    )
-                                  : Image.file(
-                                      File(_selectedImageFile!.path),
-                                      fit: BoxFit.contain,
-                                    ),
+                              child: _buildImageWidget(),
                             ),
                             if (_topTextController.text.isNotEmpty)
                               Positioned(
@@ -422,6 +414,28 @@ class _MemeCreatorScreenState extends State<MemeCreatorScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildImageWidget() {
+    if (kIsWeb) {
+      if (_webImage != null) {
+        return Image.memory(
+          _webImage!,
+          fit: BoxFit.contain,
+        );
+      }
+      return Container(
+        color: Colors.grey[300],
+        child: const Center(
+          child: Text('Image preview not available'),
+        ),
+      );
+    } else {
+      return Image.file(
+        File(_selectedImageFile!.path),
+        fit: BoxFit.contain,
+      );
+    }
   }
 
   Widget _buildControlPanel(bool isWideScreen) {

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_auth/models/user_profile.dart';
 import 'package:flutter_auth/services/notification_service.dart';
 import '../models/meme_post.dart';
@@ -433,44 +434,18 @@ class MemeService {
         newStreak = 1;
       }
 
-      // Convert color to hex string
-      String textColorHex = 'co_rgb:1_1_1'; // Default white
-      if (textColor != null) {
-        textColorHex =
-            'co_rgb:${(textColor.red / 255).toStringAsFixed(2)}_${(textColor.green / 255).toStringAsFixed(2)}_${(textColor.blue / 255).toStringAsFixed(2)}';
-      }
+      // Upload the base image first
+      String memeUrl = await _cloudinaryService.uploadImage(imagePath);
 
-      // Upload image with text overlays if provided
-      String memeUrl;
+      // If text overlays are provided, apply them
       if ((topText != null && topText.isNotEmpty) ||
           (bottomText != null && bottomText.isNotEmpty)) {
-        final List<String> transformations = [];
-
-        // Add top text with color and position
-        if (topText != null && topText.isNotEmpty) {
-          final encodedText = Uri.encodeComponent(topText);
-          transformations.add(
-            'l_text:Arial_70_bold:$encodedText/$textColorHex/g_north,y_50/fl_layer_apply/c_scale,w_0.9',
-          );
-        }
-
-        // Add bottom text with color and position
-        if (bottomText != null && bottomText.isNotEmpty) {
-          final encodedText = Uri.encodeComponent(bottomText);
-          transformations.add(
-            'l_text:Arial_70_bold:$encodedText/$textColorHex/g_south,y_50/fl_layer_apply/c_scale,w_0.9',
-          );
-        }
-
-        // Add stroke to make text more visible
-        transformations.add('e_outline:10');
-
-        memeUrl = await _cloudinaryService.uploadImageWithTransformations(
-          imagePath,
-          transformations,
+        memeUrl = await _cloudinaryService.addTextOverlay(
+          memeUrl,
+          topText: topText,
+          bottomText: bottomText,
+          textColor: textColor ?? Colors.white,
         );
-      } else {
-        memeUrl = await _cloudinaryService.uploadImage(imagePath);
       }
 
       // Create meme document
