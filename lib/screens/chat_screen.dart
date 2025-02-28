@@ -348,14 +348,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: const Icon(Icons.send),
               heroTag: 'chat_send_button',
             )
-          : FloatingActionButton(
-              onPressed: () {
-                // Implement voice recording
-              },
-              backgroundColor: Colors.white.withOpacity(0.1),
-              child: const Icon(Icons.mic),
-              heroTag: 'chat_mic_button',
-            ),
+          : null,
     );
   }
 
@@ -576,46 +569,25 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.emoji_emotions_outlined),
-              color: Colors.white,
-              onPressed: () {
-                // Implement emoji picker
-              },
-            ),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        style: const TextStyle(color: Colors.white),
-                        maxLines: null,
-                        decoration: InputDecoration(
-                          hintText: 'Type a message...',
-                          hintStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.5)),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
-                      ),
+                child: TextField(
+                  controller: _messageController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: null,
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.attach_file),
-                      color: Colors.white,
-                      onPressed: () {
-                        // Implement file attachment
-                      },
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -628,13 +600,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: Colors.pink,
                       onPressed: _sendMessage,
                     )
-                  : IconButton(
-                      icon: const Icon(Icons.mic),
-                      color: Colors.white,
-                      onPressed: () {
-                        // Implement voice recording
-                      },
-                    ),
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
