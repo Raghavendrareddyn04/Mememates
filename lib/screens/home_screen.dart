@@ -10,16 +10,12 @@ import '../models/meme_post.dart';
 import '../services/meme_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
-import '../widgets/notification_badge.dart';
 import 'chat_screen.dart';
 import 'notifications_screen.dart';
-import 'premium_screen.dart';
 import 'messages_screen.dart';
-import 'vibe_match_screen.dart';
 import 'meme_creator_screen.dart';
 import 'discovery_screen.dart';
 import 'dart:math';
-import 'package:flutter_auth/screens/leaderboard_screen.dart';
 import 'package:flutter_auth/screens/ai_meme_generator_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -42,12 +38,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Feed Preferences
   RangeValues _ageRange = const RangeValues(18, 35);
   String? _preferredGender;
-  bool _showPreferences = false;
+  final bool _showPreferences = false;
 
   // Animation controllers
   late AnimationController _fabController;
   late AnimationController _preferencesController;
-  late Animation<double> _fabAnimation;
   late TabController _feedTabController;
 
   @override
@@ -73,10 +68,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fabController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
-    );
-    _fabAnimation = CurvedAnimation(
-      parent: _fabController,
-      curve: Curves.easeOut,
     );
 
     // Preferences panel animation
@@ -138,37 +129,111 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Column(
       children: [
+        // Custom tab bar styled like the reference image
         Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.pink.shade900,
-                Colors.deepPurple.shade900,
-              ],
-            ),
-          ),
-          child: TabBar(
-            controller: _feedTabController,
-            indicatorColor: Colors.white,
-            indicatorWeight: 3,
-            labelColor: Colors.white, // Selected tab text color
-            unselectedLabelColor: Colors.white, // Unselected tab text color
-            tabs: const [
-              Tab(
-                icon: Icon(Icons.photo_library,
-                    color: Colors.white), // Icon in white
-                child: Text('Memes',
-                    style: TextStyle(color: Colors.white)), // Text in white
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Back/Notification button
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade800,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
               ),
-              Tab(
-                icon: Icon(Icons.video_collection,
-                    color: Colors.white), // Icon in white
-                child: Text('RizzTok',
-                    style: TextStyle(color: Colors.white)), // Text in white
+
+              // Tab selector
+              Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade800,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Memes tab
+                    GestureDetector(
+                      onTap: () {
+                        _feedTabController.animateTo(0);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _feedTabController.index == 0
+                              ? Colors.white
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          'Memes',
+                          style: TextStyle(
+                            color: _feedTabController.index == 0
+                                ? Colors.black
+                                : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // RizzTok tab
+                    GestureDetector(
+                      onTap: () {
+                        _feedTabController.animateTo(1);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _feedTabController.index == 1
+                              ? Colors.white
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          'RizzTok',
+                          style: TextStyle(
+                            color: _feedTabController.index == 1
+                                ? Colors.black
+                                : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+
+              // Streak counter with timer
+              _buildStreakCounter(),
             ],
           ),
         ),
+
         Expanded(
           child: TabBarView(
             controller: _feedTabController,
@@ -182,6 +247,120 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildStreakCounter() {
+    // Get streak value and active status from _streakInfo or use default values
+    final int streakValue =
+        _streakInfo != null ? (_streakInfo!['streak'] ?? 10) : 10;
+    final bool isStreakActive =
+        _streakInfo != null ? (_streakInfo!['isStreakActive'] ?? true) : true;
+    final int hoursRemaining =
+        _streakInfo != null ? (_streakInfo!['hoursRemaining'] ?? 0) : 0;
+
+    return GestureDetector(
+      onTap: () {
+        // Show streak details when tapped
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.grey.shade900,
+            title: const Text('Your Streak',
+                style: TextStyle(color: Colors.white)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Current streak: $streakValue days',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isStreakActive
+                      ? 'Your streak is active!'
+                      : 'Post in $hoursRemaining hours to keep your streak!',
+                  style: TextStyle(
+                    color: isStreakActive ? Colors.green : Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Post a meme every day to build your streak!',
+                  style: TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              if (!isStreakActive)
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showPostMemeDialog();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pink,
+                  ),
+                  child: const Text('Post Now'),
+                ),
+            ],
+          ),
+        );
+      },
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade800,
+          shape: BoxShape.circle,
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.local_fire_department,
+                  color: isStreakActive ? Colors.orange : Colors.red,
+                  size: 18,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  '$streakValue',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            if (!isStreakActive)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.timer,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMemeFeed(currentUser) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -190,10 +369,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         return CustomScrollView(
           slivers: [
-            if (_streakInfo != null)
-              SliverToBoxAdapter(
-                child: _buildStreakCard(isWideScreen),
-              ),
             SliverToBoxAdapter(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -247,63 +422,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildStreakCard(bool isWideScreen) {
-    return Container(
-      padding: EdgeInsets.all(isWideScreen ? 24 : 16),
-      margin: EdgeInsets.all(isWideScreen ? 24 : 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.pink.shade900.withOpacity(0.8),
-            Colors.deepPurple.shade900.withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _streakInfo!['isStreakActive']
-                ? Icons.local_fire_department
-                : Icons.timer,
-            color: _streakInfo!['isStreakActive'] ? Colors.orange : Colors.red,
-            size: isWideScreen ? 32 : 24,
-          ),
-          const SizedBox(width: 12),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Streak: ${_streakInfo!['streak']}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isWideScreen ? 24 : 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (!_streakInfo!['isStreakActive'])
-                Text(
-                  'Post in ${_streakInfo!['hoursRemaining']}h to keep your streak!',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontSize: isWideScreen ? 16 : 14,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -839,6 +957,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             caption: caption,
           );
         }
+
+        // Refresh streak info after posting
+        await _loadStreakInfo();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -876,242 +998,113 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return Scaffold(
-      appBar: _currentIndex == 1
-          ? AppBar(
-              automaticallyImplyLeading: false,
-              title: Row(
-                children: [
-                  const Text(
-                    'MemeMates',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 20,
-                    ),
+      backgroundColor: Colors.black,
+      body: _buildCurrentScreen(),
+      floatingActionButton: _currentIndex == 1
+          ? Container(
+              height: 70,
+              width: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.pink,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    spreadRadius: 2,
                   ),
-                  if (_currentIndex == 1)
-                    IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.dashboard_customize,
-                              color: _showPreferences
-                                  ? Colors.pink
-                                  : const Color.fromARGB(241, 242, 245, 245),
-                              size: 20,
-                            ),
-                            if (_showPreferences) const SizedBox(width: 4),
-                            if (_showPreferences)
-                              const Icon(
-                                Icons.expand_less,
-                                color: Color.fromARGB(241, 242, 245, 245),
-                                size: 20,
-                              ),
-                          ],
-                        ),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _showPreferences = !_showPreferences;
-                          if (_showPreferences) {
-                            _preferencesController.forward();
-                          } else {
-                            _preferencesController.reverse();
-                          }
-                        });
-                      },
-                    ),
                 ],
               ),
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.pink.shade900,
-                      Colors.purple.shade900,
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                // Leaderboard Button
-                IconButton(
-                  icon: const Icon(Icons.leaderboard, color: Colors.deepOrange),
-                  tooltip: 'View Leaderboard',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LeaderboardScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                IconButton(
-                  icon: const Icon(Icons.favorite, color: Colors.white),
-                  tooltip: 'Vibe Match',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const VibeMatchScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                IconButton(
-                  icon: NotificationBadge(
-                    child: const Icon(Icons.notifications, color: Colors.red),
-                  ),
-                  tooltip: 'Notifications',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const NotificationsScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                IconButton(
-                  icon: const Icon(Icons.diamond, color: Colors.amber),
-                  tooltip: 'Premium Access',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PremiumScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            )
-          : AppBar(
-              automaticallyImplyLeading: false,
-              title: Text(
-                _currentIndex == 0
-                    ? 'Messages'
-                    : _currentIndex == 2
-                        ? 'Discover'
-                        : 'Profile',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.add,
+                  size: 32,
                   color: Colors.white,
                 ),
+                onPressed: _showPostMemeDialog,
               ),
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.pink.shade900,
-                      Colors.purple.shade900,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.pink.shade900,
-              const Color.fromARGB(255, 158, 158, 159),
-              Colors.deepPurple.shade900,
-            ],
-          ),
-        ),
-        child: _buildCurrentScreen(),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.pink.shade900,
-              Colors.deepPurple.shade900,
-            ],
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          backgroundColor: Colors.transparent,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white.withOpacity(0.6),
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat),
-              label: 'Messages',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.explore),
-              label: 'Discover',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: _currentIndex == 1
-          ? Stack(
-              children: [
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: ScaleTransition(
-                    scale: _fabAnimation,
-                    child: FloatingActionButton.extended(
-                      heroTag: 'fab_extended', // Unique heroTag
-                      onPressed: _showPostMemeDialog,
-                      backgroundColor: Colors.pink,
-                      icon: Icon(_isVideoMode
-                          ? Icons.video_library
-                          : Icons.add_photo_alternate),
-                      label: Text(_isVideoMode ? 'Upload Video' : 'Create'),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16, right: 16),
-                    child: FloatingActionButton(
-                      heroTag: 'fab_regular', // Unique heroTag
-                      onPressed: _showPostMemeDialog,
-                      backgroundColor: Colors.pink,
-                      child: Icon(_isVideoMode
-                          ? Icons.video_library
-                          : Icons.add_photo_alternate),
-                    ),
-                  ),
-                ),
-              ],
             )
           : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomAppBar(
+        color: const Color(0xFF333333),
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.home_filled,
+                  label: 'Home',
+                  index: 1,
+                  color: _currentIndex == 1 ? Colors.pink : Colors.grey,
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.search,
+                  label: 'Discover',
+                  index: 2,
+                  color: _currentIndex == 2 ? Colors.pink : Colors.grey,
+                ),
+              ),
+              // Empty space for FAB
+              const Expanded(child: SizedBox()),
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Message',
+                  index: 0,
+                  color: _currentIndex == 0 ? Colors.pink : Colors.grey,
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.person_outline,
+                  label: 'Profile',
+                  index: 3,
+                  color: _currentIndex == 3 ? Colors.pink : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required int index,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: color,
+            size: 24,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
