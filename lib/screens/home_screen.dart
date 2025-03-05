@@ -648,24 +648,201 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildMemeCard(
       MemePost meme, String currentUserId, bool isWideScreen) {
-    return FutureBuilder<bool>(
-      key: ValueKey(meme.id),
-      future: meme.canChatWith(currentUserId),
-      builder: (context, snapshot) {
-        final canChat = snapshot.data ?? false;
-        return _MemeCard(
-          meme: meme,
-          currentUserId: currentUserId,
-          onLike: () async {
-            await _memeService.likeMeme(meme.id, currentUserId);
-          },
-          onPass: () async {
-            await _memeService.passMeme(meme.id, currentUserId);
-          },
-          onChat: canChat ? () => _navigateToChat(context, meme) : null,
-          isWideScreen: isWideScreen,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MemeDetailScreen(meme: meme),
+          ),
         );
       },
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Meme Image
+            Image.network(
+              meme.memeUrl,
+              fit: BoxFit.cover,
+            ),
+
+            // Bottom gradient overlay
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.8),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // User info and stats
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User name and location row
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundImage: meme.userProfileImage != null
+                            ? NetworkImage(meme.userProfileImage!)
+                            : null,
+                        child: meme.userProfileImage == null
+                            ? Text(meme.userName[0].toUpperCase())
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        meme.userName.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Stats row
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on,
+                          color: Colors.white, size: 16),
+                      const Text(
+                        'USA',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.local_fire_department,
+                          color: Colors.orange),
+                      Text(
+                        '${meme.likedByUsers.length}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // User attributes row
+                  Row(
+                    children: [
+                      _buildAttribute('Male', Icons.person),
+                      const SizedBox(width: 12),
+                      _buildAttribute('6 feet', Icons.straighten),
+                      const SizedBox(width: 12),
+                      _buildAttribute('39.2 kg', Icons.fitness_center),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Like/Pass buttons overlay
+            Positioned(
+              right: 16,
+              top: MediaQuery.of(context).size.height * 0.4,
+              child: Column(
+                children: [
+                  _buildActionButton(
+                    icon: Icons.favorite,
+                    color: meme.isLikedBy(currentUserId)
+                        ? Colors.red
+                        : Colors.white,
+                    onPressed: () =>
+                        _memeService.likeMeme(meme.id, currentUserId),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildActionButton(
+                    icon: Icons.close,
+                    color: Colors.white,
+                    onPressed: () =>
+                        _memeService.passMeme(meme.id, currentUserId),
+                  ),
+                  FutureBuilder<bool>(
+                    future: meme.canChatWith(currentUserId),
+                    builder: (context, snapshot) {
+                      if (snapshot.data == true) {
+                        return Column(
+                          children: [
+                            const SizedBox(height: 16),
+                            _buildActionButton(
+                              icon: Icons.chat,
+                              color: Colors.white,
+                              onPressed: () => _navigateToChat(context, meme),
+                            ),
+                          ],
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttribute(String text, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.black.withOpacity(0.6),
+      ),
+      child: IconButton(
+        icon: Icon(icon),
+        color: color,
+        onPressed: onPressed,
+        iconSize: 30,
+      ),
     );
   }
 
