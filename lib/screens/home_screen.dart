@@ -135,30 +135,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Back/Notification button
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationsScreen(),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade800,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.notifications,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-              ),
+              // Streak counter with timer (moved to left)
+              _buildStreakCounter(),
 
               // Tab selector
               Container(
@@ -228,8 +206,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
 
-              // Streak counter with timer
-              _buildStreakCounter(),
+              // Notification button (moved to right)
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade800,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -250,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildStreakCounter() {
     // Get streak value and active status from _streakInfo or use default values
     final int streakValue =
-        _streakInfo != null ? (_streakInfo!['streak'] ?? 10) : 10;
+        _streakInfo != null ? (_streakInfo!['streak'] ?? 0) : 0;
     final bool isStreakActive =
         _streakInfo != null ? (_streakInfo!['isStreakActive'] ?? true) : true;
     final int hoursRemaining =

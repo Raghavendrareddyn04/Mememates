@@ -96,13 +96,9 @@ class _MessagesScreenState extends State<MessagesScreen>
   }
 
   String _getInitials(String? name) {
-    if (name == null || name.isEmpty) {
-      return '?';
-    }
+    if (name == null || name.isEmpty) return '?';
     final nameParts = name.trim().split(' ');
-    if (nameParts.isEmpty) {
-      return '?';
-    }
+    if (nameParts.isEmpty) return '?';
     if (nameParts.length > 1) {
       return '${nameParts[0][0]}${nameParts[1][0]}'.toUpperCase();
     }
@@ -128,165 +124,35 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.width < 600;
-    final isLargeScreen = size.width > 1200;
-
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.pink.shade900,
-                Colors.purple.shade900,
-                Colors.deepPurple.shade900,
-              ],
-            ),
-          ),
-        ),
+        backgroundColor: Colors.black,
         elevation: 0,
-        title: Column(
-          children: [
-            Text(
-              'Where Hearts Connect',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: isSmallScreen ? 20 : 24,
-                fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withOpacity(0.2),
-                    offset: const Offset(1, 1),
-                    blurRadius: 2,
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              'Your Love Story Begins Here',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: isSmallScreen ? 12 : 14,
-                fontWeight: FontWeight.w400,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withOpacity(0.2),
-                    offset: const Offset(1, 1),
-                    blurRadius: 2,
-                  ),
-                ],
-              ),
-            ),
-          ],
+        title: const Text(
+          'MESSAGES',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
         ),
         centerTitle: true,
-        actions: [
-          if (!isSmallScreen)
-            IconButton(
-              icon: const Icon(Icons.filter_list, color: Colors.white),
-              onPressed: () {
-                // Implement filter functionality
-              },
-            ),
-          IconButton(
-            icon: Icon(
-              _isSearching ? Icons.close : Icons.search,
-              color: Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _isSearching = !_isSearching;
-                if (!_isSearching) {
-                  _searchController.clear();
-                  _filterChats('');
-                }
-              });
-            },
-          ),
-        ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.deepPurple.shade900,
-              Colors.purple.shade900,
-              Colors.pink.shade900,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildSearchBar(isSmallScreen),
-              Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: LoadingAnimation(
-                          message: "Loading your conversations...",
-                        ),
-                      )
-                    : _buildChatList(isSmallScreen, isLargeScreen),
+      body: _isLoading
+          ? const Center(
+              child: LoadingAnimation(
+                message: "Loading your conversations...",
               ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : _buildChatList(),
     );
   }
 
-  Widget _buildSearchBar(bool isSmallScreen) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      height: _isSearching ? (isSmallScreen ? 70 : 80) : 0,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 16 : 24,
-            vertical: isSmallScreen ? 8 : 12,
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-              ),
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search conversations...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.white.withOpacity(0.7),
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: _filterChats,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatList(bool isSmallScreen, bool isLargeScreen) {
+  Widget _buildChatList() {
     if (_filteredChats.isEmpty) {
-      return _buildEmptyState(isSmallScreen);
+      return _buildEmptyState();
     }
 
     return FadeTransition(
@@ -296,14 +162,11 @@ class _MessagesScreenState extends State<MessagesScreen>
         child: RefreshIndicator(
           onRefresh: _loadChats,
           child: ListView.builder(
-            padding: EdgeInsets.symmetric(
-              horizontal: isSmallScreen ? 16 : 24,
-              vertical: isSmallScreen ? 8 : 16,
-            ),
+            padding: EdgeInsets.zero,
             itemCount: _filteredChats.length,
             itemBuilder: (context, index) {
               final chat = _filteredChats[index];
-              return _buildChatTile(chat, isSmallScreen, isLargeScreen);
+              return _buildChatTile(chat);
             },
           ),
         ),
@@ -311,212 +174,137 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
-  Widget _buildChatTile(
-      ChatPreview chat, bool isSmallScreen, bool isLargeScreen) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+  Widget _buildChatTile(ChatPreview chat) {
+    return InkWell(
+      onTap: () => _navigateToChat(chat),
       child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.2),
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => _navigateToChat(chat),
-            child: Padding(
-              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-              child: Row(
-                children: [
-                  Hero(
-                    tag: 'profile_${chat.chatId}_${chat.otherUserId}',
-                    child: Container(
-                      width: isSmallScreen ? 56 : 64,
-                      height: isSmallScreen ? 56 : 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white10.withOpacity(0.2),
-                            Colors.purple.shade400,
-                          ],
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: chat.otherUserProfileImage != null
-                          ? CircleAvatar(
-                              backgroundImage:
-                                  NetworkImage(chat.otherUserProfileImage!),
-                            )
-                          : Center(
-                              child: Text(
-                                _getInitials(chat.otherUserName),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: isSmallScreen ? 20 : 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: chat.otherUserProfileImage != null
+                        ? DecorationImage(
+                            image: NetworkImage(chat.otherUserProfileImage!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    color: Colors.grey[800],
+                  ),
+                  child: chat.otherUserProfileImage == null
+                      ? Center(
+                          child: Text(
+                            _getInitials(chat.otherUserName),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
+                          ),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    chat.otherUserName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              chat.otherUserName,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isSmallScreen ? 16 : 18,
-                                fontWeight: chat.isRead
-                                    ? FontWeight.normal
-                                    : FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              _formatTimestamp(chat.lastMessageTime),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: isSmallScreen ? 12 : 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                chat.lastMessage,
-                                style: TextStyle(
-                                  color: chat.isRead
-                                      ? Colors.white.withOpacity(0.7)
-                                      : Colors.white,
-                                  fontSize: isSmallScreen ? 14 : 16,
-                                  fontWeight: chat.isRead
-                                      ? FontWeight.normal
-                                      : FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (!chat.isRead) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.pink,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'NEW',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+                  const SizedBox(height: 4),
+                  Text(
+                    chat.lastMessage,
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-          ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!chat.isRead)
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFE94DAA),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '3', // Replace with actual unread count from chat.unreadCount
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatTimestamp(chat.lastMessageTime),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isSmallScreen) {
+  Widget _buildEmptyState() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.chat_bubble_outline,
-                size: isSmallScreen ? 48 : 64,
-                color: Colors.white.withOpacity(0.7),
-              ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 64,
+            color: Colors.grey[600],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _isSearching ? 'No matching conversations' : 'No messages yet',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: 24),
-            Text(
-              _isSearching ? 'No matching conversations' : 'No messages yet',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: isSmallScreen ? 20 : 24,
-                fontWeight: FontWeight.bold,
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _isSearching
+                ? 'Try a different search term'
+                : 'Start matching with people to chat!',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
             ),
-            const SizedBox(height: 12),
-            Text(
-              _isSearching
-                  ? 'Try a different search term'
-                  : 'Start matching with people to chat!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: isSmallScreen ? 14 : 16,
-              ),
-            ),
-            if (!_isSearching) ...[
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/home');
-                },
-                icon: const Icon(Icons.explore),
-                label: const Text('Explore Memes'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pink,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 24 : 32,
-                    vertical: isSmallScreen ? 12 : 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
